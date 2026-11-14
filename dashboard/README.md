@@ -19,7 +19,7 @@ WaiShe 的网页控制台。它是纯静态资源：构建产物由 `waishe-brid
 ### 本地开发
 
 1. 一个终端运行 `npm run mock`，另一个终端运行 `npm run dev`。
-2. 浏览器先打开 `http://localhost:5173/auth?code=dev` 取得会话 Cookie（模拟托盘“打开 Dashboard”的一次性授权），随后跳转到首页。
+2. 浏览器先打开 `http://localhost:5173/auth?code=dev` 取得会话 Cookie（模拟托盘“打开 Dashboard”的一次性授权），随后跳转到首页。加上 `&next=%23%2Fpanel` 则直接进入紧凑面板，与原生设置窗口的登录方式相同。
 3. 不带会话直接访问会得到 401，用于检查“请从系统托盘打开”的提示。
 
 也可以先 `npm run build`，再只运行 `npm run mock`，打开 `http://127.0.0.1:27463/auth?code=dev`：模拟服务器同时提供 `dist/`。
@@ -41,7 +41,7 @@ WaiShe 的网页控制台。它是纯静态资源：构建产物由 `waishe-brid
 | `mouse.lift_off_distance` 其他值 | `accepted`（无法回读） |
 | `headset.sleep_timer` = `30min` | 模拟超时，`failed`，返回重新读取的值 |
 
-开启开发者模式后可上传任意以 ZIP 文件头开头的 `.wsdrv` 文件来模拟安装本地驱动。
+开启开发者模式后可上传任意以 ZIP 文件头开头的 `.wsdrv` 文件来模拟安装本地驱动。`/status` 报告正在运行 Razer Synapse（`brand: "Razer"`），因此只有 Razer 设备的详情页会出现“厂商软件可能覆盖设置”的提示。
 
 ## 结构
 

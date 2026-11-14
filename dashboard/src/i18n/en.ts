@@ -121,6 +121,12 @@ export const en: Messages = {
   'dpi.y': 'Y',
   'dpi.value': 'DPI value',
   'dpi.range': 'Range {min}–{max}, step {step}',
+  'dpi.presets': 'Common DPI values',
+  'dpi.pending': 'Not applied yet',
+  'dpi.keyboardHint': 'Drag and release to apply. Arrow keys change by one step, Enter applies, Esc cancels.',
+  'dpi.advancedXY': 'Advanced: set X / Y separately',
+  'dpi.advancedValue': 'Advanced: enter a value',
+  'dpi.xyDiffer': 'X and Y currently differ ({x} × {y}); the slider and presets set both to the same value.',
 
   'list.title': 'Devices',
   'list.showHidden': 'Show hidden devices',

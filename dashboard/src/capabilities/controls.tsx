@@ -1,14 +1,14 @@
 // Write controls chosen by value type and constraint, never by device model.
 
-import { useEffect, useState } from 'preact/hooks';
 import type { Capability, CapabilityValue } from '../api/types';
 import { t } from '../i18n';
 import { validate } from '../lib/constraint';
-import { isDpi } from '../lib/reading';
 import { formatValue } from '../components/Value';
+import { DpiControl } from './DpiControl';
+import { parseInteger, useDraft } from './draft';
 import type { Writer } from './write';
 
-interface ControlProps {
+export interface ControlProps {
   cap: Capability;
   writer: Writer;
   /** Last value Bridge reported (any freshness), used to preselect; undefined when there is none. */
@@ -81,17 +81,6 @@ function EnumSelect({ cap, writer, current, disabled, labelId, feedbackId }: Con
   );
 }
 
-/** Draft text that follows the reported value until the user edits it. */
-function useDraft(source: string): [string, (v: string) => void] {
-  const [draft, setDraft] = useState(source);
-  useEffect(() => setDraft(source), [source]);
-  return [draft, setDraft];
-}
-
-function parseInteger(text: string): number {
-  return text.trim() === '' ? Number.NaN : Number(text);
-}
-
 function RangeControl({ cap, writer, current, disabled, labelId, feedbackId }: ControlProps) {
   const c = cap.constraint;
   const min = c && c.kind !== 'choices' ? c.min : cap.type === 'percent' ? 0 : undefined;
@@ -141,65 +130,6 @@ function RangeControl({ cap, writer, current, disabled, labelId, feedbackId }: C
         {t('common.apply')}
       </button>
       {error && <span class="field-error">{error}</span>}
-    </form>
-  );
-}
-
-function DpiControl({ cap, writer, current, disabled, labelId, feedbackId }: ControlProps) {
-  const c = cap.constraint?.kind === 'dpi' ? cap.constraint : null;
-  const independent = c?.independentXY ?? true;
-  const cur = current !== undefined && isDpi(current) ? current : null;
-  const [x, setX] = useDraft(cur ? String(cur.x) : '');
-  const [y, setY] = useDraft(cur ? String(cur.y) : '');
-  const xv = parseInteger(x);
-  const yv = independent ? parseInteger(y) : xv;
-  const value = { x: xv, y: yv };
-  const empty = x === '' || (independent && y === '');
-  const error = empty ? null : validate(cap, value);
-  const unchanged = cur !== null && cur.x === xv && cur.y === yv;
-  const off = disabled || writer.pending;
-  const field = (label: string, v: string, set: (v: string) => void) => (
-    <label class="dpi-field">
-      <span>{label}</span>
-      <input
-        type="number"
-        class="input input-number"
-        inputMode="numeric"
-        min={c?.min}
-        max={c?.max}
-        step={c?.step}
-        value={v}
-        disabled={off}
-        aria-invalid={error !== null}
-        aria-describedby={feedbackId}
-        onInput={(e) => set(e.currentTarget.value)}
-      />
-    </label>
-  );
-  return (
-    <form
-      class="dpi-control"
-      aria-labelledby={labelId}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void writer.write(value);
-      }}
-    >
-      <div class="dpi-fields">
-        {independent ? (
-          <>
-            {field(t('dpi.x'), x, setX)}
-            {field(t('dpi.y'), y, setY)}
-          </>
-        ) : (
-          field(t('dpi.value'), x, setX)
-        )}
-        <button type="submit" class="btn btn-primary" disabled={off || empty || error !== null || unchanged}>
-          {t('common.apply')}
-        </button>
-      </div>
-      {c && <p class="hint">{t('dpi.range', { min: c.min, max: c.max, step: c.step })}</p>}
-      {error && <p class="field-error">{error}</p>}
     </form>
   );
 }

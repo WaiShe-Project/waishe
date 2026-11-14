@@ -36,17 +36,10 @@ export function Drivers({ drivers, developerMode }: { drivers: Driver[]; develop
   );
 }
 
-function faultText(fault: Driver['fault']): string | null {
-  if (fault === null || fault === undefined) return null;
-  if (typeof fault === 'string') return fault;
-  return fault.message ?? fault.code ?? JSON.stringify(fault);
-}
-
 function DriverCard({ driver, confirm }: { driver: Driver; confirm: (message: string) => Promise<boolean> }) {
   const [toggle, runToggle] = useAction();
   const [remove, runRemove] = useAction();
   const busy = toggle.kind === 'pending' || remove.kind === 'pending';
-  const fault = faultText(driver.fault);
   return (
     <article class={`card driver-card is-${driver.status}`} aria-labelledby={`drv-${driver.id}`}>
       <div class="device-card-head">
@@ -61,7 +54,7 @@ function DriverCard({ driver, confirm }: { driver: Driver; confirm: (message: st
         </div>
       </div>
       {driver.description && <p>{driver.description}</p>}
-      {fault && <p class="notice notice-danger">{t('drivers.fault', { fault })}</p>}
+      {driver.fault && <p class="notice notice-danger">{t('drivers.fault', { fault: driver.fault })}</p>}
       <dl class="facts">
         <dt>{t('drivers.version')}</dt>
         <dd class="mono">{driver.version}</dd>

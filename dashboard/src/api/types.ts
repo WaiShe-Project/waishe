@@ -88,8 +88,8 @@ export interface Driver {
   trust: Trust;
   enabled: boolean;
   status: 'active' | 'disabled' | 'faulted';
-  /** The contract only shows `null`; a string or `{ code?, message? }` are both handled. */
-  fault: string | { code?: string; message?: string } | null;
+  /** Reason for `faulted`, otherwise null. */
+  fault: string | null;
   models: DriverModel[];
 }
 
@@ -121,7 +121,13 @@ export interface Status {
   driverAbi: string;
   platform: string;
   port: number;
-  vendorSoftware: string[];
+  vendorSoftware: VendorSoftware[];
+}
+
+/** A running vendor tool that may override settings of devices of its `brand`. */
+export interface VendorSoftware {
+  name: string;
+  brand: string;
 }
 
 export interface HidDevice {
@@ -139,7 +145,8 @@ export type WriteOutcome = 'applied' | 'accepted' | 'rejected' | 'failed';
 
 export interface WriteResult {
   outcome: WriteOutcome;
-  reading: Reading | null;
+  /** The current reading after the write; present for every outcome. */
+  reading: Reading;
   message: string | null;
 }
 

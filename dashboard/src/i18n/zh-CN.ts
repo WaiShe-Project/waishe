@@ -122,6 +122,12 @@ export const zhCN = {
   'dpi.y': 'Y',
   'dpi.value': 'DPI 值',
   'dpi.range': '范围 {min}–{max}，步进 {step}',
+  'dpi.presets': '常用 DPI',
+  'dpi.pending': '待应用',
+  'dpi.keyboardHint': '拖动后松开即应用。方向键按步进调整，Enter 应用，Esc 取消。',
+  'dpi.advancedXY': '高级：分别设置 X / Y',
+  'dpi.advancedValue': '高级：输入数值',
+  'dpi.xyDiffer': 'X 与 Y 当前不同（{x} × {y}），滑块和常用值会把两者设为相同值。',
 
   'list.title': '设备',
   'list.showHidden': '显示已隐藏的设备',

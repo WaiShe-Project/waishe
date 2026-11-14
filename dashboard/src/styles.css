@@ -725,6 +725,55 @@ a.card:hover {
   accent-color: var(--accent);
 }
 
+.dpi-control {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dpi-presets {
+  justify-self: start;
+}
+
+.dpi-slider {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.dpi-slider input[type='range'] {
+  flex: 1 1 240px;
+  accent-color: var(--accent);
+  min-height: 34px;
+}
+
+.dpi-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 5ch;
+  text-align: right;
+}
+
+.dpi-value.is-pending {
+  color: var(--accent);
+}
+
+.dpi-slider-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.dpi-advanced summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+  width: max-content;
+}
+
+.dpi-inputs {
+  margin-top: 0.5rem;
+}
+
 .dpi-field {
   display: flex;
   flex-direction: column;

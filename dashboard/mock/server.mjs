@@ -318,7 +318,7 @@ function mergeSettings(patch) {
         next[key] = value;
         break;
       case 'pollIntervalSeconds':
-        if (!isInt(value, 10, 86_400)) return 'pollIntervalSeconds must be an integer between 10 and 86400';
+        if (!isInt(value, 30, 3600)) return 'pollIntervalSeconds must be an integer between 30 and 3600';
         next.pollIntervalSeconds = value;
         break;
       case 'tray':
@@ -340,7 +340,7 @@ function mergeSettings(patch) {
           next.lowBattery.enabled = value.enabled;
         }
         if ('threshold' in value) {
-          if (!isInt(value.threshold, 1, 99)) return 'lowBattery.threshold must be an integer between 1 and 99';
+          if (!isInt(value.threshold, 5, 95)) return 'lowBattery.threshold must be an integer between 5 and 95';
           next.lowBattery.threshold = value.threshold;
         }
         if ('intervalMinutes' in value) {
@@ -423,7 +423,8 @@ async function handleApi(req, res, path) {
       driverAbi: '0.1',
       platform: 'windows-x64',
       port: PORT,
-      vendorSoftware: ['Razer Synapse'],
+      // Only Razer devices get the "may override settings" warning.
+      vendorSoftware: [{ name: 'Razer Synapse', brand: 'Razer' }],
     });
   }
 
@@ -600,9 +601,13 @@ const server = createServer(async (req, res) => {
       if (url.searchParams.get('code') !== AUTH_CODE) return error(res, 401, 'unauthorized', 'invalid code');
       const token = randomBytes(24).toString('hex');
       sessions.add(token);
+      // `next` may only name an in-app hash route, e.g. `#/panel` (sent as %23%2Fpanel).
+      // An unencoded `#/panel` never reaches the server; the browser keeps that
+      // fragment across the redirect, which leads to the same place.
+      const next = url.searchParams.get('next') ?? '';
       res.writeHead(303, {
         'Set-Cookie': `ws_session=${token}; HttpOnly; SameSite=Strict; Path=/`,
-        Location: '/',
+        Location: /^#\/[\w/-]*$/.test(next) ? `/${next}` : '/',
       });
       return res.end();
     }

@@ -10,14 +10,11 @@ import { t } from '../i18n';
 import { displayName } from '../lib/reading';
 import { setSettings } from '../state/store';
 
-/**
- * Client-side limits. The contract does not define them, so they are kept loose
- * and Bridge's 422 `invalid_settings` remains the final word.
- */
+/** Same limits as Bridge's settings validation; a 422 `invalid_settings` is still shown if they ever drift. */
 const LIMITS = {
-  threshold: { min: 1, max: 99 },
+  threshold: { min: 5, max: 95 },
   intervalMinutes: { min: 1, max: 1440 },
-  pollIntervalSeconds: { min: 10, max: 86_400 },
+  pollIntervalSeconds: { min: 30, max: 3600 },
 };
 
 function usePatch(): [ActionState, (patch: SettingsPatch) => void] {

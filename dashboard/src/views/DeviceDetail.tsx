@@ -24,7 +24,7 @@ export function DeviceDetail({ device, status }: { device: Device | undefined; s
   }
   const readOnly = device.capabilities.filter((c) => !c.access.includes('write'));
   const writable = device.capabilities.filter((c) => c.access.includes('write'));
-  const vendor = status?.vendorSoftware ?? [];
+  const vendor = (status?.vendorSoftware ?? []).filter((v) => v.brand === device.brand).map((v) => v.name);
   return (
     <div class="page">
       <p>

@@ -6,6 +6,7 @@ import type {
   HidDevice,
   Settings,
   SettingsPatch,
+  Reading,
   Status,
   WriteResult,
 } from './types';
@@ -118,10 +119,11 @@ export const api = {
   patchSettings: (patch: SettingsPatch) => json<Settings>('PATCH', '/settings', patch),
 
   /**
-   * Writes a capability. 200/422/502 carry a write result; an error body on those
-   * statuses is mapped to the matching outcome so the UI always shows one of the four.
+   * Writes a capability. Every write result carries the reading after the write.
+   * A 422 `invalid_value` error (Bridge refused the value before sending it) is
+   * reported as `rejected` without a reading; other errors throw.
    */
-  writeCapability: async (deviceId: string, capabilityId: string, value: CapabilityValue): Promise<WriteResult> => {
+  writeCapability: async (deviceId: string, capabilityId: string, value: CapabilityValue): Promise<WriteReply> => {
     const res = await send(
       'PUT',
       `/devices/${enc(deviceId)}/capabilities/${enc(capabilityId)}`,
@@ -130,13 +132,15 @@ export const api = {
     );
     const data = await readJson(res);
     if (typeof data === 'object' && data !== null && 'outcome' in data) {
-      const r = data as Partial<WriteResult>;
-      return { outcome: r.outcome as WriteResult['outcome'], reading: r.reading ?? null, message: r.message ?? null };
+      // Bridge is the trusted, version-matched producer of write results.
+      return data as WriteResult;
     }
-    if (isErrorBody(data)) {
-      if (res.status === 422) return { outcome: 'rejected', reading: null, message: data.error.message || data.error.code };
-      if (res.status === 502) return { outcome: 'failed', reading: null, message: data.error.message || data.error.code };
+    if (isErrorBody(data) && res.status === 422) {
+      return { outcome: 'rejected', reading: null, message: data.error.message || data.error.code };
     }
     throw await toError(res, data);
   },
 };
+
+/** What a write produced; `reading` is null only when Bridge refused the value before writing. */
+export type WriteReply = Omit<WriteResult, 'reading'> & { reading: Reading | null };
