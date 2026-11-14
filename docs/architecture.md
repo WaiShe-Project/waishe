@@ -2,7 +2,7 @@
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | 草案。标注“提案”的部分取决于 [ADR-0003](decisions/0003-driver-plugin-runtime.md)、[ADR-0004](decisions/0004-dashboard-hosting-and-local-api-auth.md) 的验证结论 |
+| 状态 | 草案。插件运行时（[ADR-0003](decisions/0003-driver-plugin-runtime.md)）与本地 API 鉴权（[ADR-0004](decisions/0004-dashboard-hosting-and-local-api-auth.md)）已经 M0 验证并接受 |
 | 日期 | 2026-11-14 |
 | 对应需求 | [requirements.md](requirements.md) |
 
@@ -57,8 +57,8 @@ flowchart LR
 ## 2. 进程模型
 
 - Bridge 是登录用户会话内的普通进程，不是 Windows 服务。托盘和通知需要用户会话；不提权也就不需要管理员安装（APP-01）。OpenMouse Bridge 采用同样的形态。
-- 驱动在 Bridge 进程内的沙箱中运行（提案，ADR-0003）。每个驱动一个隔离实例，有执行时间与内存上限。
-- Dashboard 是静态资源，由 Bridge 在回环地址上同源提供（提案，ADR-0004）。
+- 驱动是 WebAssembly 核心模块，在 Bridge 进程内由 wasmi 运行（ADR-0003）。每个驱动实例一个独立存储，有燃料与内存上限；阻塞型宿主调用由宿主设超时。
+- Dashboard 是静态资源，由 Bridge 在回环地址上同源提供（ADR-0004）。
 - 无设备在线时：不加载驱动，没有周期性硬件访问，只保留热插拔监听和托盘（PERF-02）。
 
 ## 3. 数据模型

@@ -6,8 +6,8 @@
 | --- | --- | --- | --- |
 | [0001](0001-multi-repo-organization.md) | 从第一天起采用多仓库组织 | 已接受 | 2026-11-14 |
 | [0002](0002-licensing.md) | 分层许可证策略 | 已接受 | 2026-11-14 |
-| [0003](0003-driver-plugin-runtime.md) | 驱动插件运行时 | 提案，待 M0 验证 | 2026-11-14 |
-| [0004](0004-dashboard-hosting-and-local-api-auth.md) | Dashboard 托管方式与本地 API 鉴权 | 提案，待 M0 验证 | 2026-11-14 |
+| [0003](0003-driver-plugin-runtime.md) | 驱动插件运行时 | 已接受 | 2026-11-14 |
+| [0004](0004-dashboard-hosting-and-local-api-auth.md) | Dashboard 托管方式与本地 API 鉴权 | 已接受 | 2026-11-14 |
 
 ## 状态
 
