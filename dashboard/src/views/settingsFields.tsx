@@ -27,10 +27,14 @@ function usePatch(): [ActionState, (patch: SettingsPatch) => void] {
   return [state, patch];
 }
 
-function Row({ children, status }: { children: ComponentChildren; status: ActionState }) {
+/** One setting: its controls, an optional quiet note, and the save status beside them. */
+function Setting({ children, note, status }: { children: ComponentChildren; note?: string; status: ActionState }) {
   return (
-    <div class="field-row">
-      <div class="field-main">{children}</div>
+    <div class="setting">
+      <div class="setting-main">
+        {children}
+        {note && <p class="note">{note}</p>}
+      </div>
       <ActionStatus state={status} />
     </div>
   );
@@ -39,6 +43,7 @@ function Row({ children, status }: { children: ComponentChildren; status: Action
 interface NumberFieldProps {
   id: string;
   label: string;
+  unit: string;
   value: number;
   min: number;
   max: number;
@@ -47,7 +52,7 @@ interface NumberFieldProps {
 }
 
 /** Integer input that commits on change (blur or Enter) after validation. */
-function NumberField({ id, label, value, min, max, disabled, onCommit }: NumberFieldProps) {
+function NumberField({ id, label, unit, value, min, max, disabled, onCommit }: NumberFieldProps) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   const n = draft.trim() === '' ? Number.NaN : Number(draft);
@@ -59,23 +64,26 @@ function NumberField({ id, label, value, min, max, disabled, onCommit }: NumberF
   return (
     <div class="number-field">
       <label for={id}>{label}</label>
-      <input
-        id={id}
-        class="input input-number"
-        type="number"
-        inputMode="numeric"
-        min={min}
-        max={max}
-        step={1}
-        value={draft}
-        disabled={disabled}
-        aria-invalid={error !== null}
-        aria-describedby={error ? `${id}-error` : undefined}
-        onInput={(e) => setDraft(e.currentTarget.value)}
-        onChange={() => {
-          if (error === null && n !== value) onCommit(n);
-        }}
-      />
+      <span class="input-with-unit">
+        <input
+          id={id}
+          class="input input-number num"
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={max}
+          step={1}
+          value={draft}
+          disabled={disabled}
+          aria-invalid={error !== null}
+          aria-describedby={error ? `${id}-error` : undefined}
+          onInput={(e) => setDraft(e.currentTarget.value)}
+          onChange={() => {
+            if (error === null && n !== value) onCommit(n);
+          }}
+        />
+        <span class="unit">{unit}</span>
+      </span>
       {error && (
         <span class="field-error" id={`${id}-error`}>
           {error}
@@ -88,7 +96,7 @@ function NumberField({ id, label, value, min, max, disabled, onCommit }: NumberF
 export function AutostartField({ settings }: { settings: Settings }) {
   const [state, patch] = usePatch();
   return (
-    <Row status={state}>
+    <Setting status={state}>
       <Switch
         checked={settings.autostart}
         disabled={state.kind === 'pending'}
@@ -96,7 +104,7 @@ export function AutostartField({ settings }: { settings: Settings }) {
       >
         {t('settings.autostart')}
       </Switch>
-    </Row>
+    </Setting>
   );
 }
 
@@ -105,29 +113,29 @@ export function LowBatteryFields({ settings }: { settings: Settings }) {
   const lb = settings.lowBattery;
   const pending = state.kind === 'pending';
   return (
-    <Row status={state}>
+    <Setting status={state}>
       <Switch checked={lb.enabled} disabled={pending} onChange={(enabled) => patch({ lowBattery: { enabled } })}>
         {t('settings.lowBattery.enabled')}
       </Switch>
-      <div class="number-row">
-        <NumberField
-          id="lb-threshold"
-          label={t('settings.lowBattery.threshold')}
-          value={lb.threshold}
-          {...LIMITS.threshold}
-          disabled={pending}
-          onCommit={(threshold) => patch({ lowBattery: { threshold } })}
-        />
-        <NumberField
-          id="lb-interval"
-          label={t('settings.lowBattery.interval')}
-          value={lb.intervalMinutes}
-          {...LIMITS.intervalMinutes}
-          disabled={pending}
-          onCommit={(intervalMinutes) => patch({ lowBattery: { intervalMinutes } })}
-        />
-      </div>
-    </Row>
+      <NumberField
+        id="lb-threshold"
+        label={t('settings.lowBattery.threshold')}
+        unit={t('unit.percent')}
+        value={lb.threshold}
+        {...LIMITS.threshold}
+        disabled={pending}
+        onCommit={(threshold) => patch({ lowBattery: { threshold } })}
+      />
+      <NumberField
+        id="lb-interval"
+        label={t('settings.lowBattery.interval')}
+        unit={t('unit.minutes')}
+        value={lb.intervalMinutes}
+        {...LIMITS.intervalMinutes}
+        disabled={pending}
+        onCommit={(intervalMinutes) => patch({ lowBattery: { intervalMinutes } })}
+      />
+    </Setting>
   );
 }
 
@@ -137,7 +145,7 @@ export function TrayFields({ settings, devices }: { settings: Settings; devices:
   const tray = settings.tray;
   const candidates = devices.filter((d) => !d.hidden || d.id === tray.deviceId);
   return (
-    <Row status={state}>
+    <Setting status={state}>
       <fieldset class="radio-group">
         <legend>{t('settings.tray.mode')}</legend>
         <label class="radio">
@@ -189,14 +197,14 @@ export function TrayFields({ settings, devices }: { settings: Settings; devices:
           </select>
         </div>
       )}
-    </Row>
+    </Setting>
   );
 }
 
 export function LanguageField({ settings }: { settings: Settings }) {
   const [state, patch] = usePatch();
   return (
-    <Row status={state}>
+    <Setting status={state}>
       <div class="number-field">
         <label for="language">{t('settings.language')}</label>
         <select
@@ -218,24 +226,24 @@ export function LanguageField({ settings }: { settings: Settings }) {
           </option>
         </select>
       </div>
-    </Row>
+    </Setting>
   );
 }
 
 export function PollField({ settings }: { settings: Settings }) {
   const [state, patch] = usePatch();
   return (
-    <Row status={state}>
+    <Setting status={state} note={t('settings.pollHint')}>
       <NumberField
         id="poll"
         label={t('settings.poll')}
+        unit={t('unit.seconds')}
         value={settings.pollIntervalSeconds}
         {...LIMITS.pollIntervalSeconds}
         disabled={state.kind === 'pending'}
         onCommit={(pollIntervalSeconds) => patch({ pollIntervalSeconds })}
       />
-      <p class="hint">{t('settings.pollHint')}</p>
-    </Row>
+    </Setting>
   );
 }
 
@@ -244,25 +252,24 @@ export function DeveloperField({
   confirm,
 }: {
   settings: Settings;
-  confirm: (message: string) => Promise<boolean>;
+  confirm: (message: string, action: string) => Promise<boolean>;
 }) {
   const [state, patch] = usePatch();
   return (
-    <Row status={state}>
+    <Setting status={state} note={t('settings.developerWarning')}>
       <Switch
         checked={settings.developerMode}
         disabled={state.kind === 'pending'}
         onChange={(developerMode) =>
           void (async () => {
-            if (developerMode && !(await confirm(t('settings.developerConfirm')))) return;
+            if (developerMode && !(await confirm(t('settings.developerConfirm'), t('settings.developerEnable')))) return;
             patch({ developerMode });
           })()
         }
       >
         {t('settings.developerMode')}
       </Switch>
-      <p class="notice notice-warn">{t('settings.developerWarning')}</p>
-    </Row>
+    </Setting>
   );
 }
 
@@ -270,8 +277,7 @@ export function NetworkFields({ settings }: { settings: Settings }) {
   const [state, patch] = usePatch();
   const pending = state.kind === 'pending';
   return (
-    <Row status={state}>
-      <p class="hint">{t('settings.network.hint')}</p>
+    <Setting status={state} note={t('settings.network.hint')}>
       <Switch
         checked={settings.network.registry}
         disabled={pending}
@@ -286,6 +292,6 @@ export function NetworkFields({ settings }: { settings: Settings }) {
       >
         {t('settings.network.updates')}
       </Switch>
-    </Row>
+    </Setting>
   );
 }

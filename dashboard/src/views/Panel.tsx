@@ -1,32 +1,34 @@
-// Compact view for Bridge's native settings window (APP-08, about 380x520):
-// device status plus the settings subset; no navigation and no device configuration.
+// Compact view for Bridge's native settings window (APP-08, about 400 x 640):
+// the same device rows as the list, smaller, then the settings subset. No
+// navigation and no device configuration.
 
 import type { Device, Settings } from '../api/types';
-import { BatteryMeter, ReadingValue } from '../components/Value';
 import { t } from '../i18n';
-import { displayName, findCapability } from '../lib/reading';
-import { LinkState } from './DeviceList';
+import { DeviceRow } from './DeviceList';
 import { AutostartField, LowBatteryFields, TrayFields } from './settingsFields';
 
 export function Panel({ devices, settings, live }: { devices: Device[]; settings: Settings; live: boolean }) {
   const visible = devices.filter((d) => !d.hidden);
   return (
-    <div class="panel">
+    <main class="panel">
       {!live && (
-        <p class="banner banner-warn" role="status">
-          {t('conn.reconnecting')}
+        <p class="notice" role="status">
+          <span class="led is-low" aria-hidden="true" />
+          {t('conn.reconnectingHint')}
         </p>
       )}
       <section aria-labelledby="panel-devices">
-        <h2 class="panel-title" id="panel-devices">
+        <h1 class="panel-title" id="panel-devices">
           {t('panel.devices')}
-        </h2>
+        </h1>
         {visible.length === 0 ? (
-          <p class="empty">{t('list.empty')}</p>
+          <p class="note">{t('list.empty')}</p>
         ) : (
-          <ul class="panel-devices">
+          <ul class="device-list">
             {visible.map((d) => (
-              <PanelDevice device={d} key={d.id} />
+              <li key={d.id}>
+                <DeviceRow device={d} threshold={settings.lowBattery.threshold} />
+              </li>
             ))}
           </ul>
         )}
@@ -39,31 +41,6 @@ export function Panel({ devices, settings, live }: { devices: Device[]; settings
         <LowBatteryFields settings={settings} />
         <TrayFields settings={settings} devices={devices} />
       </section>
-    </div>
-  );
-}
-
-function PanelDevice({ device }: { device: Device }) {
-  const battery = findCapability(device, 'battery.level');
-  const charging = findCapability(device, 'battery.charging');
-  const mic = findCapability(device, 'headset.mic_mute');
-  return (
-    <li class={`panel-device${device.link === 'connected' ? '' : ' is-offline'}`}>
-      <div class="panel-device-head">
-        <span class="panel-device-name">{displayName(device)}</span>
-        <LinkState device={device} />
-      </div>
-      {battery && <BatteryMeter cap={battery} link={device.link} compact />}
-      {(charging || mic) && (
-        <div class="panel-device-extra">
-          {charging && <ReadingValue cap={charging} link={device.link} compact />}
-          {mic && (
-            <span>
-              {t('panel.mic')} <ReadingValue cap={mic} link={device.link} compact />
-            </span>
-          )}
-        </div>
-      )}
-    </li>
+    </main>
   );
 }

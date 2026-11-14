@@ -54,26 +54,19 @@ export function Switch({ checked, disabled, busy, onChange, children }: SwitchPr
   );
 }
 
-export function Spinner() {
-  return <span class="spinner" aria-hidden="true" />;
-}
-
 export type ActionState =
   | { kind: 'idle' }
   | { kind: 'pending' }
   | { kind: 'done'; message: string }
   | { kind: 'error'; message: string };
 
+/** One line of status text next to the control that triggered it. */
 export function ActionStatus({ state }: { state: ActionState }) {
   return (
-    <span class="action-status" role="status" aria-live="polite">
-      {state.kind === 'pending' && (
-        <>
-          <Spinner /> {t('common.sending')}
-        </>
-      )}
+    <span class="status-line" role="status" aria-live="polite">
+      {state.kind === 'pending' && <span class="text-muted">{t('common.sending')}…</span>}
       {state.kind === 'done' && <span class="text-ok">{state.message}</span>}
-      {state.kind === 'error' && <span class="text-danger">{state.message}</span>}
+      {state.kind === 'error' && <span class="text-fault">{state.message}</span>}
     </span>
   );
 }
@@ -110,19 +103,23 @@ export function errorText(err: unknown): string {
 
 interface ConfirmRequest {
   message: string;
+  action: string;
   resolve: (ok: boolean) => void;
 }
 
-/** Modal confirmation built on <dialog> (focus trapping and Esc handling come from the browser). */
-export function useConfirm(): [preact.JSX.Element | null, (message: string) => Promise<boolean>] {
+/**
+ * Modal confirmation built on <dialog> (focus trapping and Esc handling come
+ * from the browser). The confirm button names the action it performs.
+ */
+export function useConfirm(): [preact.JSX.Element | null, (message: string, action: string) => Promise<boolean>] {
   const [request, setRequest] = useState<ConfirmRequest | null>(null);
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     if (request && ref.current && !ref.current.open) ref.current.showModal();
   }, [request]);
-  const ask = (message: string) => {
+  const ask = (message: string, action: string) => {
     const { promise, resolve } = Promise.withResolvers<boolean>();
-    setRequest({ message, resolve });
+    setRequest({ message, action, resolve });
     return promise;
   };
   const close = (ok: boolean) => {
@@ -138,7 +135,7 @@ export function useConfirm(): [preact.JSX.Element | null, (message: string) => P
           {t('common.cancel')}
         </button>
         <button type="button" class="btn btn-primary" onClick={() => close(true)}>
-          {t('common.confirm')}
+          {request.action}
         </button>
       </div>
     </dialog>

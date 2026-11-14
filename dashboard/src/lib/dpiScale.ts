@@ -1,12 +1,14 @@
 // Non-linear slider scale for DPI. A linear track over e.g. 100..30000 leaves the
-// common values (400..3200) a few pixels wide, so the track is split into three
-// logarithmic segments and the common band gets most of it.
+// common values a few pixels wide, so the track is split into three logarithmic
+// segments and the everyday band 400..6400 gets 70 % of it (400..3200 alone gets
+// about half). Ending the band at 6400 also keeps the preset ticks under the
+// track far enough apart to label.
 
 /** Slider positions run 0..RESOLUTION; values are snapped to the constraint grid. */
 export const RESOLUTION = 1000;
 
 const BAND_LOW = 400;
-const BAND_HIGH = 3200;
+const BAND_HIGH = 6400;
 /** Share of the track given to [min, BAND_LOW] and to [BAND_HIGH, max]. */
 const EDGE_SHARE = 0.15;
 

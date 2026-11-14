@@ -1,89 +1,83 @@
 import { useState } from 'preact/hooks';
 import type { Device } from '../api/types';
 import { Switch } from '../components/common';
-import { BatteryMeter, ReadingValue } from '../components/Value';
-import { kindLabel, linkLabel, t, transportLabel } from '../i18n';
-import { displayName, findCapability, viewOf } from '../lib/reading';
+import { BatteryFigure, BatteryNote, LinkLed, liveStatus } from '../components/Value';
+import { kindLabel, t, transportLabel } from '../i18n';
+import { displayName, findCapability } from '../lib/reading';
 import { href } from '../router';
 
-export function DeviceList({ devices }: { devices: Device[] }) {
+export function DeviceList({ devices, threshold }: { devices: Device[]; threshold: number }) {
   const [showHidden, setShowHidden] = useState(false);
   const visible = showHidden ? devices : devices.filter((d) => !d.hidden);
   return (
     <div class="page">
-      <div class="page-head">
-        <h1>{t('list.title')}</h1>
-        <div class="page-tools">
-          <Switch checked={showHidden} onChange={setShowHidden}>
-            {t('list.showHidden')}
-          </Switch>
-          <a class="btn" href={href.hid}>
-            {t('list.allHid')}
-          </a>
-        </div>
-      </div>
+      <h1 class="sr-only">{t('list.title')}</h1>
       {visible.length === 0 ? (
         <p class="empty">{devices.length === 0 ? t('list.empty') : t('list.emptyHidden')}</p>
       ) : (
-        <ul class="device-grid">
+        <ul class="device-list">
           {visible.map((d) => (
             <li key={d.id}>
-              <DeviceCard device={d} />
+              <DeviceRow device={d} threshold={threshold} link={href.device(d.id)} />
             </li>
           ))}
         </ul>
       )}
+      <div class="list-footer">
+        <Switch checked={showHidden} onChange={setShowHidden}>
+          {t('list.showHidden')}
+        </Switch>
+        <a href={href.hid}>{t('list.allHid')}</a>
+      </div>
     </div>
   );
 }
 
-export function LinkState({ device }: { device: Device }) {
-  const active = device.endpoints.find((e) => e.active) ?? device.endpoints[0];
-  return (
-    <span class={`link-state is-${device.link}`}>
-      <span class="dot" aria-hidden="true" />
-      {linkLabel(device.link)}
-      {active && device.link === 'connected' && (
-        <span class="text-muted link-transport"> · {transportLabel(active.transport)}</span>
-      )}
-    </span>
-  );
+interface RowProps {
+  device: Device;
+  threshold: number;
+  /** Detail link; rows without one (the native panel) are plain. */
+  link?: string;
 }
 
-/** True when anything on the device is shown as a historical value. */
-function hasHistorical(device: Device): boolean {
-  return device.capabilities.some((c) => {
-    const v = viewOf(c, device.link);
-    return v.kind === 'historical' || (v.kind === 'unavailable' && v.last !== null);
-  });
-}
-
-function DeviceCard({ device }: { device: Device }) {
+/**
+ * One device: battery numeral in a fixed column, name and kind, then the status
+ * words. Shared by the device list and the compact panel.
+ */
+export function DeviceRow({ device, threshold, link }: RowProps) {
   const battery = findCapability(device, 'battery.level');
-  const charging = findCapability(device, 'battery.charging');
-  return (
-    <a class={`card device-card${device.link === 'connected' ? '' : ' is-offline'}`} href={href.device(device.id)}>
-      <div class="device-card-head">
-        <h2 class="device-name">{displayName(device)}</h2>
-        <div class="badges">
-          {device.hidden && <span class="tag">{t('list.hidden')}</span>}
-          {hasHistorical(device) && <span class="tag tag-muted">{t('list.historical')}</span>}
-        </div>
-      </div>
-      <p class="device-meta">
-        {device.brand} · {kindLabel(device.kind)}
-      </p>
-      <LinkState device={device} />
-      {battery && (
-        <div class="device-battery">
-          <BatteryMeter cap={battery} link={device.link} compact />
-        </div>
-      )}
-      {charging && (
-        <div class="device-charging">
-          <ReadingValue cap={charging} link={device.link} compact />
-        </div>
-      )}
+  const active = device.endpoints.find((e) => e.active) ?? device.endpoints[0];
+  const words = liveStatus(device);
+  const body = (
+    <>
+      <span class="row-figure">
+        {battery && <BatteryFigure cap={battery} link={device.link} threshold={threshold} size={link ? 'fig-m' : 'fig-s'} />}
+      </span>
+      <span class="row-name">
+        <span class="device-name">{displayName(device)}</span>
+        <span class="row-kind">
+          {kindLabel(device.kind)}
+          {device.hidden && <span class="row-flag">{t('list.hidden')}</span>}
+        </span>
+      </span>
+      <span class="row-status">
+        <LinkLed link={device.link} />
+        {device.link === 'connected' && active && <span>{transportLabel(active.transport)}</span>}
+        {words.map((w) => (
+          <span key={w}>{w}</span>
+        ))}
+        {battery && <BatteryNote cap={battery} link={device.link} />}
+      </span>
+    </>
+  );
+  return link ? (
+    <a class={`device-row${device.link === 'connected' ? '' : ' is-offline'}`} href={link}>
+      {body}
+      <span class="row-chevron" aria-hidden="true">
+        ›
+      </span>
     </a>
+  ) : (
+    <div class={`device-row is-plain${device.link === 'connected' ? '' : ' is-offline'}`}>{body}</div>
   );
 }

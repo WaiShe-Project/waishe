@@ -2,7 +2,7 @@
 
 WaiShe 的网页控制台。它是纯静态资源：构建产物由 `waishe-bridge` 内嵌，并在 `http://127.0.0.1:27463/` 同源提供（ADR-0004）。Dashboard 只通过本地 API 与 Bridge 交互，接口契约见 `waishe-bridge` 仓库的 `docs/local-api.md`（API 0.1）。
 
-技术选型：Preact + TypeScript（strict）+ Vite，纯 CSS（自定义属性，按 `prefers-color-scheme` 切换明暗），不引入 UI 框架与 CSS 框架。页面不发起任何外部网络请求（无外部字体、CDN、统计），离线可用。
+技术选型：Preact + TypeScript（strict）+ Vite，纯 CSS（自定义属性，按 `prefers-color-scheme` 切换明暗），不引入 UI 框架与 CSS 框架。页面不发起任何外部网络请求（无外部 CDN、统计），离线可用；数字字体 Barlow Condensed 以 woff2 子集随构建内嵌。视觉与文案规范见 [DESIGN.md](DESIGN.md)。
 
 ## 脚本
 
@@ -15,6 +15,7 @@ WaiShe 的网页控制台。它是纯静态资源：构建产物由 `waishe-brid
 | `npm run dev` | 启动 Vite 开发服务器，`/api` 与 `/auth` 代理到 `http://127.0.0.1:27463`；可用环境变量 `WAISHE_API_TARGET` 修改代理目标 |
 | `npm run build` | 构建到 `dist/`（资源使用相对路径） |
 | `npm run typecheck` | TypeScript 类型检查 |
+| `npm run fonts` | 重新生成 `src/fonts/` 中的 Barlow Condensed woff2 子集（仅开发时需要；首次运行会从 Google Fonts 仓库下载 TTF 到 `node_modules/.cache/fonts/`） |
 
 ### 本地开发
 
@@ -50,11 +51,13 @@ dashboard/
 ├─ index.html
 ├─ vite.config.ts
 ├─ mock/server.mjs          模拟 Bridge
+├─ scripts/build-fonts.mjs  字体子集生成脚本（开发用）
 └─ src/
    ├─ main.tsx              入口
    ├─ app.tsx               连接状态门（401、Bridge 未运行、版本不兼容）、导航与路由分发
    ├─ router.ts             手写 hash 路由：#/、#/hid、#/device/<id>、#/drivers、#/settings、#/panel
-   ├─ styles.css
+   ├─ styles.css            设计令牌（色彩、字号）与全部样式
+   ├─ fonts/                Barlow Condensed 500/600 woff2 子集与 OFL.txt 许可证
    ├─ api/                  契约类型与 fetch 封装
    ├─ state/
    │  ├─ store.ts           全局状态与订阅

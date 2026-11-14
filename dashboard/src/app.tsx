@@ -26,16 +26,17 @@ export function App() {
 
   switch (state.phase) {
     case 'unauthorized':
-      return <Gate title="gate.unauthorized.title" body="gate.unauthorized.body" />;
+      return <Gate led="is-low" title="gate.unauthorized.title" body="gate.unauthorized.body" />;
     case 'unreachable':
       return (
-        <Gate title="gate.unreachable.title" body="gate.unreachable.body">
+        <Gate led="is-hollow" title="gate.unreachable.title" body="gate.unreachable.body">
           <RetryControls />
         </Gate>
       );
     case 'incompatible':
       return (
         <Gate
+          led="is-fault"
           title="gate.incompatible.title"
           body="gate.incompatible.body"
           params={{ actual: state.status?.apiVersion ?? '?', expected: SUPPORTED_API_VERSION }}
@@ -51,38 +52,40 @@ export function App() {
 function Loading() {
   return (
     <main class="gate" aria-busy="true">
-      <p class="text-muted">{t('gate.loading')}</p>
+      <p class="note">{t('gate.loading')}</p>
     </main>
   );
+}
+
+interface GateProps {
+  /** Status LED next to the title. */
+  led: string;
+  title: MessageKey;
+  body: MessageKey;
+  params?: Record<string, string>;
+  children?: ComponentChildren;
 }
 
 /**
  * Full-screen notice. The language setting is unknown at this point (it comes
  * from Bridge), so the text is shown in both languages.
  */
-function Gate({
-  title,
-  body,
-  params,
-  children,
-}: {
-  title: MessageKey;
-  body: MessageKey;
-  params?: Record<string, string>;
-  children?: ComponentChildren;
-}) {
+function Gate({ led, title, body, params, children }: GateProps) {
   const other: Language = getLanguage() === 'en' ? 'zh-CN' : 'en';
   return (
     <main class="gate">
-      <div class="gate-box" role="alert">
-        <p class="gate-brand">{t('app.name')}</p>
-        <h1>{t(title, params)}</h1>
-        <p>{t(body, params)}</p>
+      <div class="gate-body" role="alert">
+        <p class="wordmark">{t('app.name')}</p>
+        <h1 class="gate-title">
+          <span class={`led ${led}`} aria-hidden="true" />
+          {t(title, params)}
+        </h1>
+        <p class="gate-text">{t(body, params)}</p>
+        {children}
         <div class="gate-alt" lang={other}>
           <p class="gate-alt-title">{tIn(other, title, params)}</p>
           <p>{tIn(other, body, params)}</p>
         </div>
-        {children}
       </div>
     </main>
   );
@@ -92,11 +95,11 @@ function RetryControls() {
   const now = useNow(1000);
   const seconds = Math.max(0, Math.ceil((nextRetryAt - now) / 1000));
   return (
-    <div class="gate-actions">
+    <div class="inline-actions gate-actions">
       <button type="button" class="btn btn-primary" onClick={() => void connect()}>
         {t('gate.retry')}
       </button>
-      {seconds > 0 && <span class="text-muted">{t('gate.unreachable.auto', { seconds })}</span>}
+      {seconds > 0 && <span class="note">{t('gate.unreachable.auto', { seconds })}</span>}
     </div>
   );
 }
@@ -121,31 +124,36 @@ function Shell({ state, route }: { state: AppState; route: Route }) {
         {t('nav.skip')}
       </button>
       <header class="topbar">
-        <a class="brand" href={href.devices}>
-          {t('app.name')}
-        </a>
-        <nav aria-label={t('nav.main')}>
-          <ul class="nav">
-            {NAV.map(([name, link, label]) => (
-              <li key={name}>
-                <a href={link} aria-current={section === name ? 'page' : undefined}>
-                  {t(label)}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <span class={`conn${state.live ? ' is-live' : ''}`} role="status">
-          <span class="dot" aria-hidden="true" />
-          <span class="conn-text">{state.live ? t('conn.live') : t('conn.reconnecting')}</span>
-        </span>
+        <div class="topbar-inner">
+          <a class="wordmark" href={href.devices}>
+            {t('app.name')}
+          </a>
+          <nav aria-label={t('nav.main')}>
+            <ul class="nav">
+              {NAV.map(([name, link, label]) => (
+                <li key={name}>
+                  <a href={link} aria-current={section === name ? 'page' : undefined}>
+                    {t(label)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <span class="conn led-label" role="status">
+            <span class={`led ${state.live ? 'is-on' : 'is-low'}`} aria-hidden="true" />
+            <span class="conn-text">{state.live ? t('conn.live') : t('conn.reconnecting')}</span>
+          </span>
+        </div>
       </header>
-      {!state.live && state.devices && (
-        <p class="banner banner-warn" role="status">
-          {t('conn.reconnectingHint')}
-        </p>
-      )}
       <main id="main" tabIndex={-1}>
+        {!state.live && state.devices && (
+          <div class="page page-banner">
+            <p class="notice" role="status">
+              <span class="led is-low" aria-hidden="true" />
+              {t('conn.reconnectingHint')}
+            </p>
+          </div>
+        )}
         <Page state={state} route={route} />
       </main>
     </>
@@ -155,16 +163,19 @@ function Shell({ state, route }: { state: AppState; route: Route }) {
 function Page({ state, route }: { state: AppState; route: Route }) {
   if (route.name === 'hid') return <HidDevices />;
   if (!state.devices || !state.settings || !state.drivers) {
-    return <p class="page text-muted">{t('common.loading')}</p>;
+    return <p class="page note">{t('common.loading')}</p>;
   }
+  const threshold = state.settings.lowBattery.threshold;
   switch (route.name) {
     case 'device':
-      return <DeviceDetail device={state.devices.find((d) => d.id === route.id)} status={state.status} />;
+      return (
+        <DeviceDetail device={state.devices.find((d) => d.id === route.id)} status={state.status} threshold={threshold} />
+      );
     case 'drivers':
       return <Drivers drivers={state.drivers} developerMode={state.settings.developerMode} />;
     case 'settings':
       return <Settings settings={state.settings} devices={state.devices} status={state.status} />;
     default:
-      return <DeviceList devices={state.devices} />;
+      return <DeviceList devices={state.devices} threshold={threshold} />;
   }
 }

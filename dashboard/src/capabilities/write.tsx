@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { api } from '../api/client';
 import type { Capability, CapabilityValue, WriteOutcome } from '../api/types';
-import { errorText, Spinner } from '../components/common';
+import { errorText } from '../components/common';
 import { t } from '../i18n';
 import { validate } from '../lib/constraint';
 import { setReading } from '../state/store';
@@ -16,6 +16,8 @@ export type WriteState =
 export interface Writer {
   state: WriteState;
   pending: boolean;
+  /** Increments each time a write lands a new reading; drives the one settle transition. */
+  settled: number;
   write: (value: CapabilityValue) => Promise<void>;
 }
 
@@ -25,6 +27,7 @@ export interface Writer {
  */
 export function useWriter(deviceId: string, cap: Capability): Writer {
   const [state, setState] = useState<WriteState>({ kind: 'idle' });
+  const [settled, setSettled] = useState(0);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
@@ -39,6 +42,7 @@ export function useWriter(deviceId: string, cap: Capability): Writer {
     try {
       const result = await api.writeCapability(deviceId, cap.id, value);
       if (result.reading) setReading(deviceId, cap.id, result.reading);
+      if (result.outcome === 'applied' || result.outcome === 'accepted') setSettled((n) => n + 1);
       setState({ kind: 'result', outcome: result.outcome, message: result.message });
       if (result.outcome === 'applied') {
         timer.current = window.setTimeout(() => setState({ kind: 'idle' }), 3000);
@@ -48,33 +52,32 @@ export function useWriter(deviceId: string, cap: Capability): Writer {
     }
   };
 
-  return { state, pending: state.kind === 'pending', write };
+  return { state, pending: state.kind === 'pending', settled, write };
 }
 
-export function WriteFeedback({ state, id }: { state: WriteState; id?: string }) {
+/** Shown beside the reading while a write is in flight. */
+export function WritePending({ state }: { state: WriteState }) {
+  return state.kind === 'pending' ? <span class="write-pending">{t('write.pending')}…</span> : null;
+}
+
+/** One line under the reading with the outcome of the last write. */
+export function WriteResult({ state, id }: { state: WriteState; id: string }) {
   let body = null;
   switch (state.kind) {
-    case 'pending':
-      body = (
-        <span class="text-muted">
-          <Spinner /> {t('write.pending')}
-        </span>
-      );
-      break;
     case 'invalid':
-      body = <span class="text-danger">{state.message}</span>;
+      body = <span class="text-fault">{state.message}</span>;
       break;
     case 'error':
-      body = <span class="text-danger">{t('write.error', { message: state.message })}</span>;
+      body = <span class="text-fault">{t('write.error', { message: state.message })}</span>;
       break;
     case 'result':
       body = outcomeText(state.outcome, state.message);
       break;
   }
   return (
-    <div class="write-feedback" role="status" aria-live="polite" id={id}>
+    <p class="write-result" role="status" aria-live="polite" id={id}>
       {body}
-    </div>
+    </p>
   );
 }
 
@@ -83,12 +86,10 @@ function outcomeText(outcome: WriteOutcome, message: string | null) {
     case 'applied':
       return <span class="text-ok">{t('write.applied')}</span>;
     case 'accepted':
-      return <span class="text-warn">{t('write.accepted')}</span>;
+      return <span class="text-low">{t('write.accepted')}</span>;
     case 'rejected':
-      return <span class="text-danger">{t('write.rejected', { message: message ?? '' })}</span>;
+      return <span class="text-fault">{t('write.rejected', { message: message ?? '' })}</span>;
     case 'failed':
-      return (
-        <span class="text-danger">{t('write.failed', { message: message ?? t('write.failedNoMessage') })}</span>
-      );
+      return <span class="text-fault">{t('write.failed', { message: message ?? t('write.failedNoMessage') })}</span>;
   }
 }

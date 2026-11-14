@@ -3,119 +3,158 @@ import { api } from '../api/client';
 import type { Device, Status } from '../api/types';
 import { CapabilityItem } from '../capabilities/CapabilityItem';
 import { ActionStatus, Switch, useAction } from '../components/common';
-import { kindLabel, linkLabel, t, transportLabel } from '../i18n';
-import { displayName } from '../lib/reading';
+import { BatteryFigure, BatteryNote, LinkLed, ReadingValue } from '../components/Value';
+import { kindLabel, linkLabel, t, tMaybe, transportLabel } from '../i18n';
+import { displayName, findCapability } from '../lib/reading';
 import { href } from '../router';
 import { upsertDevice } from '../state/store';
-import { LinkState } from './DeviceList';
+
+/** Shown on the nameplate rather than as controls. */
+const PLATE_CAPABILITIES: Record<string, true> = {
+  'battery.level': true,
+  'battery.charging': true,
+  'link.state': true,
+  'device.firmware': true,
+};
 
 const hex = (n: number) => n.toString(16).toUpperCase().padStart(4, '0');
 
-export function DeviceDetail({ device, status }: { device: Device | undefined; status: Status | null }) {
+interface Props {
+  device: Device | undefined;
+  status: Status | null;
+  threshold: number;
+}
+
+export function DeviceDetail({ device, status, threshold }: Props) {
   if (!device) {
     return (
       <div class="page">
-        <p>
-          <a href={href.devices}>{t('common.back')}</a>
-        </p>
+        <BackLink />
         <p class="empty">{t('detail.notFound')}</p>
       </div>
     );
   }
-  const readOnly = device.capabilities.filter((c) => !c.access.includes('write'));
-  const writable = device.capabilities.filter((c) => c.access.includes('write'));
+  const battery = findCapability(device, 'battery.level');
+  const charging = findCapability(device, 'battery.charging');
+  const firmware = findCapability(device, 'device.firmware');
+  const controls = device.capabilities.filter((c) => !PLATE_CAPABILITIES[c.id]);
   const vendor = (status?.vendorSoftware ?? []).filter((v) => v.brand === device.brand).map((v) => v.name);
+  // When every capability shares one verification level, say it once on the plate.
+  const levels = new Set(device.capabilities.map((c) => c.verification));
+  const uniform = levels.size === 1 ? device.capabilities[0]?.verification : undefined;
+  const plateVerification = uniform !== undefined ? uniform : battery?.verification;
+
   return (
     <div class="page">
-      <p>
-        <a href={href.devices}>{t('common.back')}</a>
-      </p>
-      <div class="page-head">
-        <div>
-          <h1>{displayName(device)}</h1>
-          <p class="device-meta">
-            {device.brand} · {kindLabel(device.kind)} · <LinkState device={device} />
-          </p>
-        </div>
+      <div class="detail-top">
+        <BackLink />
         <RefreshButton id={device.id} />
       </div>
-
-      {vendor.length > 0 && writable.length > 0 && (
-        <p class="notice notice-warn">{t('detail.vendorSoftware', { names: vendor.join(', ') })}</p>
+      <h1 class="detail-title">{displayName(device)}</h1>
+      {vendor.length > 0 && controls.some((c) => c.access.includes('write')) && (
+        <p class="notice">
+          <span class="led is-low" aria-hidden="true" />
+          {t('detail.vendorSoftware', { names: vendor.join(', ') })}
+        </p>
       )}
 
-      {device.capabilities.length === 0 && <p class="empty">{t('detail.noCapabilities')}</p>}
-
-      {readOnly.length > 0 && (
-        <section class="section">
-          <h2>{t('detail.status')}</h2>
-          <div class="cap-grid">
-            {readOnly.map((c) => (
-              <CapabilityItem device={device} cap={c} key={c.id} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {writable.length > 0 && (
-        <section class="section">
-          <h2>{t('detail.config')}</h2>
-          <div class="cap-list">
-            {writable.map((c) => (
-              <CapabilityItem device={device} cap={c} key={c.id} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section class="section">
-        <h2>{t('detail.info')}</h2>
-        <DeviceSettings device={device} />
-        <dl class="facts">
-          <dt>{t('detail.brand')}</dt>
-          <dd>{device.brand}</dd>
-          <dt>{t('detail.model')}</dt>
-          <dd>
-            {device.name} <span class="text-muted mono">({device.model})</span>
-          </dd>
-          <dt>{t('detail.kind')}</dt>
-          <dd>{kindLabel(device.kind)}</dd>
-          <dt>{t('detail.driver')}</dt>
-          <dd>
-            {device.driver ? (
-              <>
-                <a href={href.drivers}>{device.driver.id}</a> {device.driver.version} ·{' '}
-                {t(`trust.${device.driver.trust}`)}
-              </>
-            ) : (
-              t('detail.noDriver')
-            )}
-          </dd>
-          <dt>{t('detail.endpoints')}</dt>
-          <dd>
-            <ul class="plain-list">
+      <div class="detail-grid">
+        <section class="plate" aria-label={device.name}>
+          {battery && (
+            <div class="plate-battery">
+              <BatteryFigure cap={battery} link={device.link} threshold={threshold} size="fig-l" />
+              <BatteryNote cap={battery} link={device.link} />
+            </div>
+          )}
+          <p class="plate-status">
+            <LinkLed link={device.link} />
+            {charging && <ReadingValue cap={charging} link={device.link} compact />}
+          </p>
+          {plateVerification !== 'verified' && plateVerification !== undefined && (
+            <p class={`note${plateVerification === 'broken' ? ' text-fault' : ''}`}>
+              {tMaybe(`verification.${plateVerification ?? 'none'}`)}
+            </p>
+          )}
+          <dl class="spec">
+            <dt>{t('detail.brand')}</dt>
+            <dd>{device.brand}</dd>
+            <dt>{t('detail.model')}</dt>
+            <dd>
+              {device.name}
+              <span class="spec-sub num">{device.model}</span>
+            </dd>
+            <dt>{t('detail.kind')}</dt>
+            <dd>{kindLabel(device.kind)}</dd>
+            <dt>{t('detail.connection')}</dt>
+            <dd>
               {device.endpoints.map((e, i) => (
-                <li key={i}>
-                  {transportLabel(e.transport)}{' '}
-                  <span class="mono text-muted">
+                <span class="spec-line" key={i}>
+                  {transportLabel(e.transport)}
+                  <span class="num">
                     {hex(e.vendorId)}:{hex(e.productId)}
-                  </span>{' '}
-                  · {linkLabel(e.link)}
-                  {e.active && <span class="tag">{t('detail.endpointActive')}</span>}
-                </li>
+                  </span>
+                  <span class="text-muted">{e.active ? t('detail.endpointActive') : linkLabel(e.link)}</span>
+                </span>
               ))}
-            </ul>
-          </dd>
-        </dl>
-      </section>
+            </dd>
+            {firmware && (
+              <>
+                <dt>{t('cap.device.firmware')}</dt>
+                <dd>
+                  <ReadingValue cap={firmware} link={device.link} compact />
+                </dd>
+              </>
+            )}
+            <dt>{t('detail.driver')}</dt>
+            <dd>
+              {device.driver ? (
+                <>
+                  <a href={href.drivers} class="num">
+                    {device.driver.id} {device.driver.version}
+                  </a>
+                  {device.driver.trust === 'local' && <span class="spec-sub">{t('detail.localDriver')}</span>}
+                </>
+              ) : (
+                t('detail.noDriver')
+              )}
+            </dd>
+          </dl>
+          <DeviceSettings device={device} />
+        </section>
+
+        <div class="controls">
+          {device.link === 'disconnected' && controls.some((c) => c.access.includes('write')) && (
+            <p class="notice">
+              <span class="led is-hollow" aria-hidden="true" />
+              {t('write.offline')}
+            </p>
+          )}
+          {controls.length === 0 ? (
+            <p class="note">{t('detail.noControls')}</p>
+          ) : (
+            controls.map((c) => (
+              <CapabilityItem device={device} cap={c} showVerification={uniform === undefined} key={c.id} />
+            ))
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function BackLink() {
+  return (
+    <a class="back" href={href.devices}>
+      <span aria-hidden="true">‹ </span>
+      {t('detail.back')}
+    </a>
   );
 }
 
 function RefreshButton({ id }: { id: string }) {
   const [state, run] = useAction();
   return (
-    <div class="page-tools">
+    <div class="inline-actions">
       <ActionStatus state={state} />
       <button
         type="button"
@@ -128,7 +167,7 @@ function RefreshButton({ id }: { id: string }) {
           })
         }
       >
-        {state.kind === 'pending' ? t('detail.refreshing') : t('detail.refresh')}
+        {t('detail.refresh')}
       </button>
     </div>
   );
@@ -142,9 +181,8 @@ function DeviceSettings({ device }: { device: Device }) {
   const [hideState, runHide] = useAction();
   const normalized = alias.trim() === '' ? null : alias.trim();
   return (
-    <div class="device-settings">
+    <div class="plate-settings">
       <form
-        class="inline-form"
         onSubmit={(e) => {
           e.preventDefault();
           void runAlias(async () => {
@@ -153,27 +191,31 @@ function DeviceSettings({ device }: { device: Device }) {
           });
         }}
       >
-        <label for="alias">{t('detail.alias')}</label>
-        <input
-          id="alias"
-          class="input"
-          type="text"
-          maxLength={64}
-          placeholder={t('detail.aliasPlaceholder')}
-          value={alias}
-          disabled={aliasState.kind === 'pending'}
-          onInput={(e) => setAlias(e.currentTarget.value)}
-        />
-        <button
-          type="submit"
-          class="btn btn-primary"
-          disabled={aliasState.kind === 'pending' || normalized === device.alias}
-        >
-          {t('common.save')}
-        </button>
+        <label class="field-label" for="alias">
+          {t('detail.alias')}
+        </label>
+        <div class="field-row-inline">
+          <input
+            id="alias"
+            class="input"
+            type="text"
+            maxLength={64}
+            placeholder={device.name}
+            value={alias}
+            disabled={aliasState.kind === 'pending'}
+            onInput={(e) => setAlias(e.currentTarget.value)}
+          />
+          <button
+            type="submit"
+            class="btn"
+            disabled={aliasState.kind === 'pending' || normalized === device.alias}
+          >
+            {t('detail.aliasSave')}
+          </button>
+        </div>
         <ActionStatus state={aliasState} />
       </form>
-      <div class="inline-form">
+      <div>
         <Switch
           checked={device.hidden}
           disabled={hideState.kind === 'pending'}

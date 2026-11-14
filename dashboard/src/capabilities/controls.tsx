@@ -22,34 +22,54 @@ export function CapabilityControl(props: ControlProps) {
   const { cap } = props;
   const c = cap.constraint;
   if (cap.type === 'dpi') return <DpiControl {...props} />;
-  if (cap.type === 'bool') return <Choices {...props} values={[true, false]} />;
+  if (cap.type === 'bool') return <Segmented {...props} values={[true, false]} />;
   if (cap.type === 'enum') return <EnumSelect {...props} />;
-  if (c?.kind === 'choices') return <Choices {...props} values={c.values} />;
+  if (c?.kind === 'choices') return <Segmented {...props} values={c.values} />;
   if (cap.type === 'integer' || cap.type === 'percent') return <RangeControl {...props} />;
   return <TextControl {...props} />;
 }
 
-/** Buttons for a small set of values; the pressed one is the value Bridge reported. */
-function Choices({ cap, writer, current, disabled, labelId, feedbackId, values }: ControlProps & { values: CapabilityValue[] }) {
+/**
+ * Key-style segmented buttons for a small set of values. The pressed key is the
+ * value Bridge reported; numbers carry their unit once, after the group.
+ */
+function Segmented({
+  cap,
+  writer,
+  current,
+  disabled,
+  labelId,
+  feedbackId,
+  values,
+}: ControlProps & { values: CapabilityValue[] }) {
+  const numeric = values.every((v) => typeof v === 'number');
   return (
-    <div class="choices" role="group" aria-labelledby={labelId} aria-describedby={feedbackId}>
-      {values.map((v) => {
-        const pressed = current === v;
-        return (
-          <button
-            type="button"
-            key={String(v)}
-            class={`choice${pressed ? ' is-pressed' : ''}`}
-            aria-pressed={pressed}
-            disabled={disabled || writer.pending}
-            onClick={() => {
-              if (!pressed) void writer.write(v);
-            }}
-          >
-            {formatValue(cap, v)}
-          </button>
-        );
-      })}
+    <div class="segmented-row">
+      <div class="segmented" role="group" aria-labelledby={labelId} aria-describedby={feedbackId}>
+        {values.map((v) => {
+          const pressed = current === v;
+          return (
+            <button
+              type="button"
+              key={String(v)}
+              class={`key${numeric ? ' num' : ''}`}
+              aria-pressed={pressed}
+              aria-label={numeric && cap.unit ? `${v} ${cap.unit}` : undefined}
+              disabled={disabled || writer.pending}
+              onClick={() => {
+                if (!pressed) void writer.write(v);
+              }}
+            >
+              {numeric ? String(v) : formatValue(cap, v)}
+            </button>
+          );
+        })}
+      </div>
+      {numeric && cap.unit && (
+        <span class="unit" aria-hidden="true">
+          {cap.unit}
+        </span>
+      )}
     </div>
   );
 }
@@ -102,6 +122,7 @@ function RangeControl({ cap, writer, current, disabled, labelId, feedbackId }: C
       {min !== undefined && max !== undefined && !Number.isNaN(value) && (
         <input
           type="range"
+          class="fader-input"
           aria-labelledby={labelId}
           min={min}
           max={max}
@@ -111,21 +132,23 @@ function RangeControl({ cap, writer, current, disabled, labelId, feedbackId }: C
           onInput={(e) => setDraft(e.currentTarget.value)}
         />
       )}
-      <input
-        type="number"
-        class="input input-number"
-        aria-labelledby={labelId}
-        aria-describedby={feedbackId}
-        aria-invalid={error !== null}
-        inputMode="numeric"
-        min={min}
-        max={max}
-        step={step}
-        value={draft}
-        disabled={off}
-        onInput={(e) => setDraft(e.currentTarget.value)}
-      />
-      {cap.unit && <span class="unit">{cap.unit}</span>}
+      <span class="input-with-unit">
+        <input
+          type="number"
+          class="input input-number num"
+          aria-labelledby={labelId}
+          aria-describedby={feedbackId}
+          aria-invalid={error !== null}
+          inputMode="numeric"
+          min={min}
+          max={max}
+          step={step}
+          value={draft}
+          disabled={off}
+          onInput={(e) => setDraft(e.currentTarget.value)}
+        />
+        {cap.type === 'percent' ? <span class="unit">%</span> : cap.unit && <span class="unit">{cap.unit}</span>}
+      </span>
       <button type="submit" class="btn btn-primary" disabled={off || error !== null || draft === '' || value === current}>
         {t('common.apply')}
       </button>
