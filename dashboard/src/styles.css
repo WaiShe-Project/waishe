@@ -699,7 +699,7 @@ main:focus {
 
 .device-row {
   display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr) 17rem 1rem;
+  grid-template-columns: 7.5rem minmax(0, 1fr) minmax(17rem, 1fr) 1rem;
   grid-template-areas: 'fig name status chev';
   align-items: center;
   column-gap: 24px;

@@ -7,7 +7,7 @@ import { useWriter, WritePending, WriteResult } from './write';
 interface ItemProps {
   device: Device;
   cap: Capability;
-  /** False when the device page already states one verification level for everything. */
+  /** False when this capability's level is the one already stated on the nameplate. */
   showVerification: boolean;
 }
 

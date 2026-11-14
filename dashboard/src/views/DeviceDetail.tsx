@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api } from '../api/client';
-import type { Device, Status } from '../api/types';
+import type { Capability, Device, Status } from '../api/types';
 import { CapabilityItem } from '../capabilities/CapabilityItem';
 import { ActionStatus, Switch, useAction } from '../components/common';
 import { BatteryFigure, BatteryNote, LinkLed, ReadingValue } from '../components/Value';
@@ -39,10 +39,9 @@ export function DeviceDetail({ device, status, threshold }: Props) {
   const firmware = findCapability(device, 'device.firmware');
   const controls = device.capabilities.filter((c) => !PLATE_CAPABILITIES[c.id]);
   const vendor = (status?.vendorSoftware ?? []).filter((v) => v.brand === device.brand).map((v) => v.name);
-  // When every capability shares one verification level, say it once on the plate.
-  const levels = new Set(device.capabilities.map((c) => c.verification));
-  const uniform = levels.size === 1 ? device.capabilities[0]?.verification : undefined;
-  const plateVerification = uniform !== undefined ? uniform : battery?.verification;
+  // The most common verification level is said once on the plate; a control
+  // mentions its own level only when it differs (ties go to the battery's).
+  const plateVerification = dominantVerification(device, battery);
 
   return (
     <div class="page">
@@ -133,13 +132,29 @@ export function DeviceDetail({ device, status, threshold }: Props) {
             <p class="note">{t('detail.noControls')}</p>
           ) : (
             controls.map((c) => (
-              <CapabilityItem device={device} cap={c} showVerification={uniform === undefined} key={c.id} />
+              <CapabilityItem
+                device={device}
+                cap={c}
+                showVerification={c.verification !== plateVerification}
+                key={c.id}
+              />
             ))
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function dominantVerification(device: Device, battery: Capability | undefined): Capability['verification'] | undefined {
+  const counts = new Map<Capability['verification'], number>();
+  for (const c of device.capabilities) counts.set(c.verification, (counts.get(c.verification) ?? 0) + 1);
+  let best: Capability['verification'] | undefined = battery?.verification;
+  let bestCount = best === undefined ? 0 : (counts.get(best) ?? 0);
+  for (const [level, n] of counts) {
+    if (n > bestCount) [best, bestCount] = [level, n];
+  }
+  return best;
 }
 
 function BackLink() {

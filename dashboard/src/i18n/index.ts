@@ -39,8 +39,16 @@ export function tIn(language: Language, key: MessageKey, params?: Params): strin
   return format(dictionaries[language][key], params);
 }
 
+/**
+ * Catalogue capabilities have translated names. Others (a driver's own
+ * additions) have no display name in API 0.1, so the id is turned into a
+ * sentence-case phrase: `mouse.lift_off_distance` -> "Lift off distance".
+ */
 export function capabilityLabel(id: string): string {
-  return tMaybe(`cap.${id}`) ?? id;
+  const known = tMaybe(`cap.${id}`);
+  if (known !== undefined) return known;
+  const words = id.slice(id.lastIndexOf('.') + 1).replace(/[_-]+/g, ' ').trim();
+  return words ? words[0]!.toUpperCase() + words.slice(1) : id;
 }
 
 export function variantLabel(capabilityId: string, variant: string): string {
