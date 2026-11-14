@@ -2,9 +2,9 @@
 
 开源的跨品牌外设统一管理平台：一个轻量本地程序、一个统一网页控制台、按需安装的设备驱动。
 
-> **WaiShe** ("peripherals" in Chinese) is an open-source, local-first manager for PC peripherals across brands. A small background app (Bridge) talks to your devices through installable user-mode drivers, shows battery levels in the system tray, and serves a web dashboard for settings such as DPI and polling rate. Windows first. The project is in the planning stage; documentation is currently in Chinese.
+> **WaiShe** ("peripherals" in Chinese) is an open-source, local-first manager for PC peripherals across brands. A small background app (Bridge) talks to your devices through installable user-mode drivers, shows battery levels in the system tray, and serves a web dashboard for settings such as DPI and polling rate. Windows 11 first. Milestone M1 (two devices end to end, verified on real hardware) is complete; there is no public release yet. Documentation is currently in Chinese.
 
-**当前阶段：需求规划。尚无可运行的代码和发行版。**
+**当前阶段：M1 完成（2026-11-14）。两款首批设备的双设备闭环已在实机上验收，尚未公开发布。** 进度见[路线图](docs/roadmap.md)与 [M1 验收记录](docs/acceptance/m1.md)。
 
 ## 它要解决什么
 
