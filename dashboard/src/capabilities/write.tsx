@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { api } from '../api/client';
 import type { Capability, CapabilityValue, WriteOutcome } from '../api/types';
 import { errorText } from '../components/common';
+import { AlertIcon, CheckIcon, InfoIcon } from '../components/icons';
 import { t } from '../i18n';
 import { validate } from '../lib/constraint';
 import { setReading } from '../state/store';
@@ -45,7 +46,7 @@ export function useWriter(deviceId: string, cap: Capability): Writer {
       if (result.outcome === 'applied' || result.outcome === 'accepted') setSettled((n) => n + 1);
       setState({ kind: 'result', outcome: result.outcome, message: result.message });
       if (result.outcome === 'applied') {
-        timer.current = window.setTimeout(() => setState({ kind: 'idle' }), 3000);
+        timer.current = window.setTimeout(() => setState({ kind: 'idle' }), 3500);
       }
     } catch (err) {
       setState({ kind: 'error', message: errorText(err) });
@@ -57,39 +58,83 @@ export function useWriter(deviceId: string, cap: Capability): Writer {
 
 /** Shown beside the reading while a write is in flight. */
 export function WritePending({ state }: { state: WriteState }) {
-  return state.kind === 'pending' ? <span class="write-pending">{t('write.pending')}…</span> : null;
-}
-
-/** One line under the reading with the outcome of the last write. */
-export function WriteResult({ state, id }: { state: WriteState; id: string }) {
-  let body = null;
-  switch (state.kind) {
-    case 'invalid':
-      body = <span class="text-fault">{state.message}</span>;
-      break;
-    case 'error':
-      body = <span class="text-fault">{t('write.error', { message: state.message })}</span>;
-      break;
-    case 'result':
-      body = outcomeText(state.outcome, state.message);
-      break;
-  }
+  if (state.kind !== 'pending') return null;
   return (
-    <p class="write-result" role="status" aria-live="polite" id={id}>
-      {body}
-    </p>
+    <span class="write-badge is-pending">
+      <span class="spinner-dot" aria-hidden="true" />
+      <span>{t('write.pending')}…</span>
+    </span>
   );
 }
 
-function outcomeText(outcome: WriteOutcome, message: string | null) {
+/** Unified feedback status for capability writes, placed in the card footer / status slot. */
+export function WriteResult({ state, id }: { state: WriteState; id: string }) {
+  let content = null;
+  switch (state.kind) {
+    case 'pending':
+      content = (
+        <span class="write-feedback is-pending">
+          <span class="spinner-dot" aria-hidden="true" />
+          <span>{t('write.pending')}…</span>
+        </span>
+      );
+      break;
+    case 'invalid':
+      content = (
+        <span class="write-feedback is-fault">
+          <AlertIcon size={14} />
+          <span>{state.message}</span>
+        </span>
+      );
+      break;
+    case 'error':
+      content = (
+        <span class="write-feedback is-fault">
+          <AlertIcon size={14} />
+          <span>{t('write.error', { message: state.message })}</span>
+        </span>
+      );
+      break;
+    case 'result':
+      content = outcomeFeedback(state.outcome, state.message);
+      break;
+  }
+  return (
+    <div class="write-result" role="status" aria-live="polite" id={id}>
+      {content}
+    </div>
+  );
+}
+
+function outcomeFeedback(outcome: WriteOutcome, message: string | null) {
   switch (outcome) {
     case 'applied':
-      return <span class="text-ok">{t('write.applied')}</span>;
+      return (
+        <span class="write-feedback is-ok">
+          <CheckIcon size={14} />
+          <span>{t('write.applied')}</span>
+        </span>
+      );
     case 'accepted':
-      return <span class="text-low">{t('write.accepted')}</span>;
+      return (
+        <span class="write-feedback is-low">
+          <InfoIcon size={14} />
+          <span>{t('write.accepted')}</span>
+        </span>
+      );
     case 'rejected':
-      return <span class="text-fault">{t('write.rejected', { message: message ?? '' })}</span>;
+      return (
+        <span class="write-feedback is-fault">
+          <AlertIcon size={14} />
+          <span>{t('write.rejected', { message: message ?? '' })}</span>
+        </span>
+      );
     case 'failed':
-      return <span class="text-fault">{t('write.failed', { message: message ?? t('write.failedNoMessage') })}</span>;
+      return (
+        <span class="write-feedback is-fault">
+          <AlertIcon size={14} />
+          <span>{t('write.failed', { message: message ?? t('write.failedNoMessage') })}</span>
+        </span>
+      );
   }
 }

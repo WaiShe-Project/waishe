@@ -3,6 +3,7 @@ import { useEffect } from 'preact/hooks';
 import { SUPPORTED_API_VERSION, type Language } from './api/types';
 import { useNow } from './components/common';
 import { getLanguage, t, tIn, type MessageKey } from './i18n';
+import { initTheme } from './lib/theme';
 import { href, useRoute, type Route } from './router';
 import { connect, nextRetryAt } from './state/connection';
 import { useAppState, type AppState } from './state/store';
@@ -12,6 +13,8 @@ import { Drivers } from './views/Drivers';
 import { HidDevices } from './views/HidDevices';
 import { Panel } from './views/Panel';
 import { Settings } from './views/Settings';
+
+initTheme();
 
 export function App() {
   const state = useAppState();
@@ -45,7 +48,11 @@ export function App() {
     case 'loading':
       return <Loading />;
     case 'ready':
-      return compact ? <PanelRoute state={state} /> : <Shell state={state} route={route} />;
+      return route.name === 'panel' ? (
+        <PanelRoute state={state} tab={route.tab} />
+      ) : (
+        <Shell state={state} route={route} />
+      );
   }
 }
 
@@ -104,9 +111,9 @@ function RetryControls() {
   );
 }
 
-function PanelRoute({ state }: { state: AppState }) {
+function PanelRoute({ state, tab }: { state: AppState; tab: 'devices' | 'settings' }) {
   if (!state.settings || !state.devices) return <Loading />;
-  return <Panel devices={state.devices} settings={state.settings} live={state.live} />;
+  return <Panel devices={state.devices} settings={state.settings} live={state.live} initialTab={tab} />;
 }
 
 const NAV: Array<[Route['name'], string, MessageKey]> = [
@@ -139,7 +146,11 @@ function Shell({ state, route }: { state: AppState; route: Route }) {
               ))}
             </ul>
           </nav>
-          <span class="conn led-label" role="status">
+          <span
+            class={`conn conn-badge ${state.live ? 'is-live' : 'is-reconnecting'}`}
+            role="status"
+            title={state.live ? t('conn.liveHint') : t('conn.reconnectingHint')}
+          >
             <span class={`led ${state.live ? 'is-on' : 'is-low'}`} aria-hidden="true" />
             <span class="conn-text">{state.live ? t('conn.live') : t('conn.reconnecting')}</span>
           </span>
@@ -169,10 +180,16 @@ function Page({ state, route }: { state: AppState; route: Route }) {
   switch (route.name) {
     case 'device':
       return (
-        <DeviceDetail device={state.devices.find((d) => d.id === route.id)} status={state.status} threshold={threshold} />
+        <DeviceDetail key={route.id} device={state.devices.find((d) => d.id === route.id)} status={state.status} threshold={threshold} />
       );
     case 'drivers':
-      return <Drivers drivers={state.drivers} developerMode={state.settings.developerMode} />;
+      return (
+        <Drivers
+          drivers={state.drivers}
+          devices={state.devices}
+          developerMode={state.settings.developerMode}
+        />
+      );
     case 'settings':
       return <Settings settings={state.settings} devices={state.devices} status={state.status} />;
     default:

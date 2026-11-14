@@ -56,35 +56,41 @@ export function HidDevices() {
           </div>
         )}
       </div>
-      <h1 class="detail-title">{t('hid.title')}</h1>
-      <p class="lede">{t('hid.intro')}</p>
+      <header class="page-header is-compact">
+        <div class="page-header-main">
+          <h1 class="page-title">{t('hid.title')}</h1>
+          <p class="page-subtitle">{t('hid.intro')}</p>
+        </div>
+      </header>
       {error && <p class="text-fault">{t('common.error', { message: error })}</p>}
       {!rows && !error && <p class="note">{t('common.loading')}</p>}
       {rows && rows.length === 0 && <p class="empty">{t('hid.empty')}</p>}
       {rows && rows.length > 0 && (
-        <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr>
-                {columns.map(([h]) => (
-                  <th scope="col" key={h}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i}>
-                  {columns.map(([h, f, num]) => (
-                    <td key={h} class={num ? 'num' : undefined}>
-                      {f(r)}
-                    </td>
+        <div class="surface-card table-card">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  {columns.map(([h]) => (
+                    <th scope="col" key={h}>
+                      {h}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    {columns.map(([h, f, num]) => (
+                      <td key={h} class={num ? 'num' : undefined}>
+                        {f(r)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -94,11 +94,13 @@ export interface Driver {
 }
 
 export type Language = 'zh-CN' | 'en';
+export type TrayStyle = 'battery' | 'brand';
+export type TrayMode = 'lowest' | 'device';
 
 export interface Settings {
   language: Language;
   autostart: boolean;
-  tray: { mode: 'lowest' | 'device'; deviceId: string | null };
+  tray: { style?: TrayStyle; mode: TrayMode; deviceId: string | null };
   lowBattery: { enabled: boolean; threshold: number; intervalMinutes: number };
   pollIntervalSeconds: number;
   developerMode: boolean;

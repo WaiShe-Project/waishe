@@ -6,7 +6,7 @@ export type Route =
   | { name: 'device'; id: string }
   | { name: 'drivers' }
   | { name: 'settings' }
-  | { name: 'panel' };
+  | { name: 'panel'; tab: 'devices' | 'settings' };
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -20,7 +20,7 @@ export function parseRoute(hash: string): Route {
     case 'settings':
       return { name: 'settings' };
     case 'panel':
-      return { name: 'panel' };
+      return { name: 'panel', tab: parts[1] === 'settings' ? 'settings' : 'devices' };
     default:
       return { name: 'devices' };
   }

@@ -2,12 +2,12 @@ import type { Capability, CapabilityValue, Device } from '../api/types';
 import { linkLabel, reasonLabel, t, tMaybe, variantLabel } from '../i18n';
 import { isDpi, viewOf, type View } from '../lib/reading';
 import { RelativeTime } from './common';
+import { BatteryIcon } from './icons';
 
 /** Human-readable value for any capability type. Battery precision is handled by BatteryFigure. */
 export function formatValue(cap: Capability, value: CapabilityValue): string {
   if (isDpi(value)) {
-    const independent = cap.constraint?.kind === 'dpi' ? cap.constraint.independentXY : true;
-    return !independent && value.x === value.y ? String(value.x) : `${value.x} × ${value.y}`;
+    return value.x === value.y ? `${value.x} ${t('dpi.unit')}` : `X ${value.x} / Y ${value.y} ${t('dpi.unit')}`;
   }
   if (typeof value === 'boolean') {
     return tMaybe(`bool.${cap.id}.${value}`) ?? t(value ? 'common.on' : 'common.off');
@@ -27,9 +27,9 @@ interface ReadingProps {
   cap: Capability;
   link: Device['link'];
   /** Extra class for the value, e.g. a size. */
-  size?: string;
+  size?: string | undefined;
   /** Hides the read time of live values (lists, compact rows). */
-  compact?: boolean;
+  compact?: boolean | undefined;
 }
 
 /**
@@ -62,8 +62,8 @@ export function ReadingValue({ cap, link, size, compact }: ReadingProps) {
       return (
         <span class="rv">
           {value(view.value, true)}
-          <span class="rv-time">
-            <RelativeTime iso={view.observedAt} label="time.lastRead" />
+          <span class="rv-time rv-historical">
+            {t('reading.historical')} · <RelativeTime iso={view.observedAt} label="time.lastRead" />
           </span>
         </span>
       );
@@ -74,7 +74,7 @@ export function ReadingValue({ cap, link, size, compact }: ReadingProps) {
           {view.last && (
             <>
               {value(view.last.value, true)}
-              <span class="rv-time">
+              <span class="rv-time rv-historical">
                 <RelativeTime iso={view.last.observedAt} label="time.lastRead" />
               </span>
             </>
@@ -89,7 +89,7 @@ export function ReadingValue({ cap, link, size, compact }: ReadingProps) {
 export type Tone = 'normal' | 'low' | 'fault' | 'off';
 
 /** Battery colour: unlit when not live, red at 10 % or less, amber at or below the alert threshold. */
-function toneOf(view: View, value: number, threshold: number): Tone {
+export function batteryToneOf(view: View, value: number, threshold: number): Tone {
   if (view.kind !== 'live') return 'off';
   if (value <= 10) return 'fault';
   if (value <= threshold) return 'low';
@@ -103,25 +103,43 @@ interface BatteryProps {
   threshold: number;
   /** `fig-m` (list), `fig-l` (detail), `fig-s` (panel). */
   size: string;
+  /** Optional charging capability to show charging bolt on the battery icon. */
+  chargingCap?: Capability | undefined;
 }
 
 /**
- * The battery numeral. Step-precision batteries show filled steps ("3/4") and a
- * segment bar, never a percentage. Read time and reasons go in BatteryNote.
+ * Battery indicator with icon, progress/step bar, and compact numeral.
+ * Step-precision batteries show filled steps ("3/4") and a segment bar, never
+ * a percentage. Read time and reasons go in BatteryNote.
  */
-export function BatteryFigure({ cap, link, threshold, size }: BatteryProps) {
+export function BatteryFigure({ cap, link, threshold, size, chargingCap }: BatteryProps) {
   const view = viewOf(cap, link);
-  const raw = view.kind === 'live' || view.kind === 'historical' ? view.value : view.kind === 'unavailable' ? view.last?.value : undefined;
+  const raw =
+    view.kind === 'live' || view.kind === 'historical'
+      ? view.value
+      : view.kind === 'unavailable'
+        ? view.last?.value
+        : undefined;
+  const chargingView = chargingCap ? viewOf(chargingCap, link) : null;
+  const isCharging = chargingView?.kind === 'live' && chargingView.value === 'charging';
+
   if (typeof raw !== 'number') {
     return (
-      <span class={`fig ${size} fig-empty`}>
-        {view.kind === 'unknown' ? t('battery.unknown') : t('battery.unavailable')}
+      <span class={`fig ${size} fig-empty is-off`}>
+        <span class="fig-head">
+          <BatteryIcon unavailable size={size === 'fig-s' ? 16 : 18} />
+          <span class="fig-empty-text">
+            {view.kind === 'unknown' ? t('battery.unknown') : t('battery.unavailable')}
+          </span>
+        </span>
       </span>
     );
   }
-  const tone = toneOf(view, raw, threshold);
+
+  const tone = batteryToneOf(view, raw, threshold);
   const historical = view.kind !== 'live' && <span class="sr-only"> ({t('reading.historical')})</span>;
   const precision = cap.precision;
+
   if (precision?.kind === 'steps' && precision.count > 0) {
     const filled = Math.max(0, Math.min(precision.count, Math.round((raw / 100) * precision.count)));
     return (
@@ -130,9 +148,12 @@ export function BatteryFigure({ cap, link, threshold, size }: BatteryProps) {
           {t('battery.stepsLabel', { filled, count: precision.count })}
           {historical}
         </span>
-        <span class="fig-number num" aria-hidden="true">
-          {filled}/{precision.count}
-          <span class="fig-unit">{t('battery.stepsUnit')}</span>
+        <span class="fig-head" aria-hidden="true">
+          <BatteryIcon level={raw} charging={isCharging} size={size === 'fig-s' ? 16 : 18} />
+          <span class="fig-number num">
+            {filled}/{precision.count}
+            <span class="fig-unit">{t('battery.stepsUnit')}</span>
+          </span>
         </span>
         <span class="segments" aria-hidden="true">
           {Array.from({ length: precision.count }, (_, i) => (
@@ -142,11 +163,19 @@ export function BatteryFigure({ cap, link, threshold, size }: BatteryProps) {
       </span>
     );
   }
+
+  const clamped = Math.max(0, Math.min(100, raw));
   return (
     <span class={`fig ${size} is-${tone}`}>
-      <span class="fig-number num">
-        {raw}
-        <span class="fig-unit">%</span>
+      <span class="fig-head">
+        <BatteryIcon level={clamped} charging={isCharging} size={size === 'fig-s' ? 16 : 18} />
+        <span class="fig-number num">
+          {clamped}
+          <span class="fig-unit">%</span>
+        </span>
+      </span>
+      <span class="battery-bar" aria-hidden="true">
+        <span class="battery-bar-fill" style={{ width: `${clamped}%` }} />
       </span>
       {historical}
     </span>
@@ -185,17 +214,18 @@ export function BatteryNote({ cap, link }: { cap: Capability; link: Device['link
 }
 
 /** Status LED plus label for the device link. */
-export function LinkLed({ link }: { link: Device['link'] }) {
+export function LinkLed({ link, pill }: { link: Device['link']; pill?: boolean | undefined }) {
   const led = link === 'connected' ? 'is-on' : link === 'disconnected' ? 'is-hollow' : 'is-off';
+  const toneClass = link === 'connected' ? 'is-ok' : link === 'disconnected' ? 'is-off' : 'is-muted';
   return (
-    <span class="led-label">
+    <span class={pill ? `status-pill ${toneClass}` : 'led-label'}>
       <span class={`led ${led}`} aria-hidden="true" />
-      {linkLabel(link)}
+      <span>{linkLabel(link)}</span>
     </span>
   );
 }
 
-/** Short live-only status words for list rows: charging state and mic mute. */
+/** Short live-only status words for compact list rows: charging state and mic mute. */
 export function liveStatus(device: Device): string[] {
   const out: string[] = [];
   for (const cap of device.capabilities) {
@@ -207,4 +237,25 @@ export function liveStatus(device: Device): string[] {
     }
   }
   return out;
+}
+
+/** Live key parameter badges for the device card identity zone (DPI, polling rate, mic state). */
+export function deviceSummaryChips(device: Device): Array<{ id: string; text: string; tone?: 'ok' | 'low' | 'neutral' }> {
+  const chips: Array<{ id: string; text: string; tone?: 'ok' | 'low' | 'neutral' }> = [];
+  for (const cap of device.capabilities) {
+    const view = viewOf(cap, device.link);
+    if (view.kind !== 'live') continue;
+    if (cap.id === 'mouse.dpi' && isDpi(view.value)) {
+      chips.push({ id: cap.id, text: formatValue(cap, view.value), tone: 'neutral' });
+    } else if (cap.id === 'mouse.polling_rate' && typeof view.value === 'number') {
+      chips.push({ id: cap.id, text: formatValue(cap, view.value), tone: 'neutral' });
+    } else if (cap.id === 'headset.mic_mute' && typeof view.value === 'boolean') {
+      chips.push({
+        id: cap.id,
+        text: t(view.value ? 'status.micMuted' : 'status.micOn'),
+        tone: view.value ? 'low' : 'ok',
+      });
+    }
+  }
+  return chips;
 }

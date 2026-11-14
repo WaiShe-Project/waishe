@@ -2,14 +2,15 @@ import { useEffect, useState } from 'preact/hooks';
 import { api } from '../api/client';
 import type { Capability, Device, Status } from '../api/types';
 import { CapabilityItem } from '../capabilities/CapabilityItem';
-import { ActionStatus, Switch, useAction } from '../components/common';
+import { ActionStatus, RelativeTime, Switch, useAction } from '../components/common';
+import { DeviceKindIcon, RefreshIcon, SettingsGearIcon, TransportIcon } from '../components/icons';
 import { BatteryFigure, BatteryNote, LinkLed, ReadingValue } from '../components/Value';
 import { kindLabel, linkLabel, t, tMaybe, transportLabel } from '../i18n';
-import { displayName, findCapability } from '../lib/reading';
+import { displayName, findCapability, viewOf } from '../lib/reading';
 import { href } from '../router';
 import { upsertDevice } from '../state/store';
 
-/** Shown on the nameplate rather than as controls. */
+/** Shown on the top overview card or technical section rather than as capability cards. */
 const PLATE_CAPABILITIES: Record<string, true> = {
   'battery.level': true,
   'battery.charging': true,
@@ -26,122 +27,285 @@ interface Props {
 }
 
 export function DeviceDetail({ device, status, threshold }: Props) {
+  const [manageOpen, setManageOpen] = useState(false);
+
   if (!device) {
     return (
       <div class="page">
-        <BackLink />
-        <p class="empty">{t('detail.notFound')}</p>
+        <div class="detail-top">
+          <BackLink />
+        </div>
+        <section class="empty-state">
+          <h1 class="empty-title">{t('detail.notFound')}</h1>
+          <div class="empty-actions">
+            <a class="btn btn-primary" href={href.devices}>
+              {t('detail.back')}
+            </a>
+          </div>
+        </section>
       </div>
     );
   }
+
   const battery = findCapability(device, 'battery.level');
   const charging = findCapability(device, 'battery.charging');
   const firmware = findCapability(device, 'device.firmware');
   const controls = device.capabilities.filter((c) => !PLATE_CAPABILITIES[c.id]);
+  const writableControls = controls.filter((c) => c.access.includes('write'));
+  const readOnlyControls = controls.filter((c) => !c.access.includes('write'));
+  const activeEndpoint = device.endpoints.find((e) => e.active) ?? device.endpoints[0];
   const vendor = (status?.vendorSoftware ?? []).filter((v) => v.brand === device.brand).map((v) => v.name);
-  // The most common verification level is said once on the plate; a control
-  // mentions its own level only when it differs (ties go to the battery's).
   const plateVerification = dominantVerification(device, battery);
+
+  // Deduplicate identical onboard persistence notes when multiple writable capabilities share it.
+  const onboardCount = writableControls.filter((c) => c.persistence === 'onboard').length;
+  const collapseOnboard = onboardCount > 1;
+
+  const batteryView = battery ? viewOf(battery, device.link) : null;
+  const firmwareView = firmware ? viewOf(firmware, device.link) : null;
+  const firmwareText =
+    firmwareView && (firmwareView.kind === 'live' || firmwareView.kind === 'historical')
+      ? String(firmwareView.value)
+      : null;
+
+  const techSummaryParts = [
+    device.brand,
+    firmwareText ? `${t('cap.device.firmware')} ${firmwareText}` : null,
+    device.driver ? `${device.driver.id} ${device.driver.version}` : t('detail.noDriver'),
+  ].filter(Boolean);
 
   return (
     <div class="page">
       <div class="detail-top">
         <BackLink />
-        <RefreshButton id={device.id} />
+        <div class="detail-top-actions">
+          <button
+            type="button"
+            class="btn btn-subtle"
+            aria-expanded={manageOpen}
+            aria-controls="device-manage-drawer"
+            onClick={() => setManageOpen((v) => !v)}
+          >
+            <SettingsGearIcon size={15} />
+            <span>{t('detail.manage')}</span>
+          </button>
+          <RefreshButton id={device.id} />
+        </div>
       </div>
-      <h1 class="detail-title">{displayName(device)}</h1>
-      {vendor.length > 0 && controls.some((c) => c.access.includes('write')) && (
-        <p class="notice">
-          <span class="led is-low" aria-hidden="true" />
-          {t('detail.vendorSoftware', { names: vendor.join(', ') })}
-        </p>
+
+      {/* Top device overview hero */}
+      <section class="detail-hero-card" aria-label={displayName(device)}>
+        <div class="hero-identity">
+          <span class={`hero-icon-box${device.link !== 'connected' ? ' is-offline' : ''}`} aria-hidden="true">
+            <DeviceKindIcon kind={device.kind} size={28} />
+          </span>
+          <div class="hero-title-group">
+            <div class="hero-title-row">
+              <h1 class="detail-title">{displayName(device)}</h1>
+              {device.hidden && <span class="badge badge-neutral">{t('list.hidden')}</span>}
+            </div>
+            <div class="hero-meta">
+              <span class="badge badge-neutral">{kindLabel(device.kind)}</span>
+              {device.alias && device.alias.trim() !== device.name && (
+                <span class="hero-model-alias">{device.name}</span>
+              )}
+              <LinkLed link={device.link} pill />
+              {activeEndpoint && (
+                <span class="transport-badge">
+                  <TransportIcon transport={activeEndpoint.transport} size={14} />
+                  <span>{transportLabel(activeEndpoint.transport)}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {battery && (
+          <div class="hero-battery-panel">
+            <BatteryFigure
+              cap={battery}
+              link={device.link}
+              threshold={threshold}
+              size="fig-l"
+              chargingCap={charging}
+            />
+            <div class="hero-battery-meta">
+              {charging && <ReadingValue cap={charging} link={device.link} compact />}
+              {batteryView?.kind === 'live' ? (
+                <span class="note">
+                  <RelativeTime iso={batteryView.observedAt} label="time.at" />
+                </span>
+              ) : (
+                <BatteryNote cap={battery} link={device.link} />
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Expandable device management drawer (rename / hide) */}
+      {manageOpen && (
+        <section id="device-manage-drawer" class="detail-manage-drawer" aria-label={t('detail.manageTitle')}>
+          <div class="drawer-header">
+            <h2 class="drawer-title">{t('detail.manageTitle')}</h2>
+            <button type="button" class="btn btn-subtle btn-sm" onClick={() => setManageOpen(false)}>
+              {t('common.close')}
+            </button>
+          </div>
+          <DeviceSettings device={device} />
+        </section>
       )}
 
-      <div class="detail-grid">
-        <section class="plate" aria-label={device.name}>
-          {battery && (
-            <div class="plate-battery">
-              <BatteryFigure cap={battery} link={device.link} threshold={threshold} size="fig-l" />
-              <BatteryNote cap={battery} link={device.link} />
-            </div>
-          )}
-          <p class="plate-status">
-            <LinkLed link={device.link} />
-            {charging && <ReadingValue cap={charging} link={device.link} compact />}
+      {/* Contextual alerts */}
+      <div class="detail-alerts">
+        {!device.driver && (
+          <p class="notice">
+            <span class="led is-low" aria-hidden="true" />
+            <span>
+              {t('detail.noDriverHint')} <a href={href.drivers}>{t('list.emptyActionDrivers')}</a>
+            </span>
           </p>
-          {plateVerification !== 'verified' && plateVerification !== undefined && (
-            <p class={`note${plateVerification === 'broken' ? ' text-fault' : ''}`}>
-              {tMaybe(`verification.${plateVerification ?? 'none'}`)}
-            </p>
-          )}
-          <dl class="spec">
-            <dt>{t('detail.brand')}</dt>
-            <dd>{device.brand}</dd>
-            <dt>{t('detail.model')}</dt>
-            <dd>
-              {device.name}
-              <span class="spec-sub num">{device.model}</span>
-            </dd>
-            <dt>{t('detail.kind')}</dt>
-            <dd>{kindLabel(device.kind)}</dd>
-            <dt>{t('detail.connection')}</dt>
-            <dd>
-              {device.endpoints.map((e, i) => (
-                <span class="spec-line" key={i}>
-                  {transportLabel(e.transport)}
-                  <span class="num">
-                    {hex(e.vendorId)}:{hex(e.productId)}
-                  </span>
-                  <span class="text-muted">{e.active ? t('detail.endpointActive') : linkLabel(e.link)}</span>
-                </span>
+        )}
+        {vendor.length > 0 && writableControls.length > 0 && (
+          <p class="notice">
+            <span class="led is-low" aria-hidden="true" />
+            <span>{t('detail.vendorSoftware', { names: vendor.join(', ') })}</span>
+          </p>
+        )}
+        {device.link === 'disconnected' && writableControls.length > 0 && (
+          <p class="notice">
+            <span class="led is-hollow" aria-hidden="true" />
+            <span>{t('write.offline')}</span>
+          </p>
+        )}
+      </div>
+
+      {/* Main configuration & status sections */}
+      <div class="detail-sections">
+        {writableControls.length > 0 && (
+          <section class="detail-section" aria-labelledby="sec-config">
+            <div class="detail-section-head">
+              <h2 class="detail-section-title" id="sec-config">
+                {t('detail.configSection')}
+              </h2>
+              {collapseOnboard && <p class="note">{t('persistence.onboard')}</p>}
+            </div>
+            <div class={`detail-capabilities-grid${writableControls.length === 1 ? ' is-single' : ''}`}>
+              {writableControls.map((c) => (
+                <CapabilityItem
+                  device={device}
+                  cap={c}
+                  showVerification={c.verification !== plateVerification}
+                  showPersistence={!collapseOnboard}
+                  key={`${device.id}:${c.id}`}
+                />
               ))}
-            </dd>
+            </div>
+          </section>
+        )}
+
+        {readOnlyControls.length > 0 && (
+          <section class="detail-section" aria-labelledby="sec-status">
+            <div class="detail-section-head">
+              <h2 class="detail-section-title" id="sec-status">
+                {t('detail.statusSection')}
+              </h2>
+              {writableControls.length === 0 && <p class="note">{t('detail.readOnlyHint')}</p>}
+            </div>
+            <div class={`detail-capabilities-grid${readOnlyControls.length === 1 ? ' is-single' : ''}`}>
+              {readOnlyControls.map((c) => (
+                <CapabilityItem
+                  device={device}
+                  cap={c}
+                  showVerification={c.verification !== plateVerification}
+                  key={`${device.id}:${c.id}`}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {controls.length === 0 && (
+          <section class="empty-state is-compact">
+            <p class="note">{t('detail.noControls')}</p>
+          </section>
+        )}
+      </div>
+
+      {/* Collapsible technical metadata */}
+      <details class="tech-section" open={controls.length === 0}>
+        <summary class="tech-summary">
+          <span class="tech-summary-title">{t('detail.techSection')}</span>
+          <span class="tech-summary-meta">{techSummaryParts.join(' · ')}</span>
+        </summary>
+        <div class="tech-body">
+          <dl class="tech-grid">
+            <div class="tech-item">
+              <dt>{t('detail.brand')}</dt>
+              <dd>{device.brand}</dd>
+            </div>
+            <div class="tech-item">
+              <dt>{t('detail.model')}</dt>
+              <dd>{device.name}</dd>
+            </div>
+            <div class="tech-item">
+              <dt>{t('detail.internalId')}</dt>
+              <dd class="num">{device.model}</dd>
+            </div>
+            <div class="tech-item">
+              <dt>{t('detail.kind')}</dt>
+              <dd>{kindLabel(device.kind)}</dd>
+            </div>
             {firmware && (
-              <>
+              <div class="tech-item">
                 <dt>{t('cap.device.firmware')}</dt>
                 <dd>
                   <ReadingValue cap={firmware} link={device.link} compact />
                 </dd>
-              </>
+              </div>
             )}
-            <dt>{t('detail.driver')}</dt>
-            <dd>
-              {device.driver ? (
-                <>
-                  <a href={href.drivers} class="num">
-                    {device.driver.id} {device.driver.version}
-                  </a>
-                  {device.driver.trust === 'local' && <span class="spec-sub">{t('detail.localDriver')}</span>}
-                </>
-              ) : (
-                t('detail.noDriver')
-              )}
-            </dd>
+            <div class="tech-item">
+              <dt>{t('detail.driver')}</dt>
+              <dd>
+                {device.driver ? (
+                  <span class="tech-inline">
+                    <a href={href.drivers} class="num">
+                      {device.driver.id} {device.driver.version}
+                    </a>
+                    <span class="badge badge-neutral">
+                      {tMaybe(`drivers.trustBadge.${device.driver.trust}`) ?? device.driver.trust}
+                    </span>
+                  </span>
+                ) : (
+                  t('detail.noDriver')
+                )}
+              </dd>
+            </div>
+            <div class="tech-item is-wide">
+              <dt>{t('detail.vidPid')}</dt>
+              <dd class="tech-endpoints">
+                {device.endpoints.map((e, i) => (
+                  <span class="spec-line" key={i}>
+                    <span>{transportLabel(e.transport)}</span>
+                    <span class="num">
+                      {hex(e.vendorId)}:{hex(e.productId)}
+                    </span>
+                    <span class="text-muted">{e.active ? t('detail.endpointActive') : linkLabel(e.link)}</span>
+                  </span>
+                ))}
+              </dd>
+            </div>
+            {plateVerification !== undefined && (
+              <div class="tech-item is-wide">
+                <dt>{t('detail.verification')}</dt>
+                <dd class={plateVerification === 'broken' ? 'text-fault' : undefined}>
+                  {tMaybe(`verification.${plateVerification ?? 'none'}`) ?? plateVerification}
+                </dd>
+              </div>
+            )}
           </dl>
-          <DeviceSettings device={device} />
-        </section>
-
-        <div class="controls">
-          {device.link === 'disconnected' && controls.some((c) => c.access.includes('write')) && (
-            <p class="notice">
-              <span class="led is-hollow" aria-hidden="true" />
-              {t('write.offline')}
-            </p>
-          )}
-          {controls.length === 0 ? (
-            <p class="note">{t('detail.noControls')}</p>
-          ) : (
-            controls.map((c) => (
-              <CapabilityItem
-                device={device}
-                cap={c}
-                showVerification={c.verification !== plateVerification}
-                key={c.id}
-              />
-            ))
-          )}
         </div>
-      </div>
+      </details>
     </div>
   );
 }
@@ -182,7 +346,8 @@ function RefreshButton({ id }: { id: string }) {
           })
         }
       >
-        {t('detail.refresh')}
+        <RefreshIcon size={15} />
+        <span>{t('detail.refresh')}</span>
       </button>
     </div>
   );
@@ -196,8 +361,9 @@ function DeviceSettings({ device }: { device: Device }) {
   const [hideState, runHide] = useAction();
   const normalized = alias.trim() === '' ? null : alias.trim();
   return (
-    <div class="plate-settings">
+    <div class="manage-grid">
       <form
+        class="manage-alias-form"
         onSubmit={(e) => {
           e.preventDefault();
           void runAlias(async () => {
@@ -209,7 +375,7 @@ function DeviceSettings({ device }: { device: Device }) {
         <label class="field-label" for="alias">
           {t('detail.alias')}
         </label>
-        <div class="field-row-inline">
+        <div class="manage-alias-row">
           <input
             id="alias"
             class="input"
@@ -222,15 +388,15 @@ function DeviceSettings({ device }: { device: Device }) {
           />
           <button
             type="submit"
-            class="btn"
+            class="btn btn-primary"
             disabled={aliasState.kind === 'pending' || normalized === device.alias}
           >
             {t('detail.aliasSave')}
           </button>
+          <ActionStatus state={aliasState} />
         </div>
-        <ActionStatus state={aliasState} />
       </form>
-      <div>
+      <div class="manage-hide-row">
         <Switch
           checked={device.hidden}
           disabled={hideState.kind === 'pending'}

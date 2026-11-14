@@ -190,7 +190,7 @@ const drivers = [
 let settings = {
   language: 'zh-CN',
   autostart: true,
-  tray: { mode: 'lowest', deviceId: null },
+  tray: { style: 'battery', mode: 'lowest', deviceId: null },
   lowBattery: { enabled: true, threshold: 20, intervalMinutes: 60 },
   pollIntervalSeconds: 300,
   developerMode: false,
@@ -323,6 +323,12 @@ function mergeSettings(patch) {
         break;
       case 'tray':
         if (typeof value !== 'object' || value === null) return 'tray must be an object';
+        if ('style' in value) {
+          if (value.style !== 'battery' && value.style !== 'brand') {
+            return 'tray.style must be battery or brand';
+          }
+          next.tray.style = value.style;
+        }
         if ('mode' in value) {
           if (value.mode !== 'lowest' && value.mode !== 'device') return 'tray.mode must be lowest or device';
           next.tray.mode = value.mode;

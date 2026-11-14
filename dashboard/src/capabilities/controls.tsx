@@ -110,49 +110,57 @@ function RangeControl({ cap, writer, current, disabled, labelId, feedbackId }: C
   const value = parseInteger(draft);
   const error = draft === '' ? null : validate(cap, value);
   const off = disabled || writer.pending;
+  const isDirty = draft !== '' && !Number.isNaN(value) && error === null && value !== current;
   return (
     <form
-      class="range-control"
+      class="range-form"
       onSubmit={(e) => {
         e.preventDefault();
         void writer.write(value);
       }}
     >
-      {/* No slider without a number: a thumb at the minimum would read as a real value. */}
-      {min !== undefined && max !== undefined && !Number.isNaN(value) && (
-        <input
-          type="range"
-          class="fader-input"
-          aria-labelledby={labelId}
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          disabled={off}
-          onInput={(e) => setDraft(e.currentTarget.value)}
-        />
+      <div class="range-control">
+        {/* No slider without a number: a thumb at the minimum would read as a real value. */}
+        {min !== undefined && max !== undefined && !Number.isNaN(value) && (
+          <input
+            type="range"
+            class="fader-input"
+            aria-labelledby={labelId}
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            disabled={off}
+            onInput={(e) => setDraft(e.currentTarget.value)}
+          />
+        )}
+        <span class="input-with-unit">
+          <input
+            type="number"
+            class="input input-number num"
+            aria-labelledby={labelId}
+            aria-describedby={feedbackId}
+            aria-invalid={error !== null}
+            inputMode="numeric"
+            min={min}
+            max={max}
+            step={step}
+            value={draft}
+            disabled={off}
+            onInput={(e) => setDraft(e.currentTarget.value)}
+          />
+          {cap.type === 'percent' ? <span class="unit">%</span> : cap.unit && <span class="unit">{cap.unit}</span>}
+        </span>
+        <button type="submit" class="btn btn-primary" disabled={off || error !== null || draft === '' || value === current}>
+          {t('common.apply')}
+        </button>
+      </div>
+      {(isDirty || error) && (
+        <div class="dpi-edit-meta">
+          {isDirty && <span class="badge badge-warn">{t('write.unapplied')}</span>}
+          {error && <span class="field-error">{error}</span>}
+        </div>
       )}
-      <span class="input-with-unit">
-        <input
-          type="number"
-          class="input input-number num"
-          aria-labelledby={labelId}
-          aria-describedby={feedbackId}
-          aria-invalid={error !== null}
-          inputMode="numeric"
-          min={min}
-          max={max}
-          step={step}
-          value={draft}
-          disabled={off}
-          onInput={(e) => setDraft(e.currentTarget.value)}
-        />
-        {cap.type === 'percent' ? <span class="unit">%</span> : cap.unit && <span class="unit">{cap.unit}</span>}
-      </span>
-      <button type="submit" class="btn btn-primary" disabled={off || error !== null || draft === '' || value === current}>
-        {t('common.apply')}
-      </button>
-      {error && <span class="field-error">{error}</span>}
     </form>
   );
 }

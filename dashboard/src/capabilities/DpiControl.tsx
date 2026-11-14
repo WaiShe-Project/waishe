@@ -1,7 +1,6 @@
-// DPI control: a fader with the common values marked as ticks under the track,
-// exact X/Y inputs behind a disclosure. Nothing is optimistic: a value chosen
-// but not yet confirmed is shown above the track, and the reading above only
-// changes from Bridge.
+// DPI control: slider + inline exact numeric input + preset chips, with
+// optional independent X/Y controls behind an expandable advanced section.
+// Draft edits are clearly distinguished from the confirmed device value.
 
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { DpiValue } from '../api/types';
@@ -17,86 +16,182 @@ const PAGE = RESOLUTION / 20;
 
 export function DpiControl(props: ControlProps) {
   const { cap, writer, current, disabled, labelId, feedbackId } = props;
+  const cur = current !== undefined && isDpi(current) ? current : null;
+
+  // Discrete-only DPI choices (e.g., sensors with fixed DPI steps).
+  if (cap.constraint?.kind === 'choices') {
+    const choices = cap.constraint.values.filter((v): v is number => typeof v === 'number');
+    return (
+      <div class="dpi-control">
+        <div class="dpi-presets-row">
+          <span class="dpi-presets-label">{t('dpi.presets')}</span>
+          <div class="dpi-presets-list" role="group" aria-labelledby={labelId} aria-describedby={feedbackId}>
+            {choices.map((p) => {
+              const pressed = cur !== null && cur.x === p && cur.y === p;
+              return (
+                <button
+                  type="button"
+                  key={p}
+                  class="preset-chip num"
+                  aria-pressed={pressed}
+                  aria-label={`${p} ${t('dpi.unit')}`}
+                  disabled={disabled || writer.pending}
+                  onClick={() => {
+                    if (!pressed) void writer.write({ x: p, y: p });
+                  }}
+                >
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const c = cap.constraint?.kind === 'dpi' ? cap.constraint : null;
   const scale = useMemo(() => (c ? dpiScale(c.min, c.max, c.step) : null), [c?.min, c?.max, c?.step]);
-  const cur = current !== undefined && isDpi(current) ? current : null;
-  const independent = c?.independentXY ?? true;
-  const [pending, setPending] = useState<number | null>(null);
-  // Drop the pending value once a write finishes; the response decides what is shown.
+  const independent = c?.independentXY ?? false;
+  const xyDiffer = cur !== null && cur.x !== cur.y;
+
+  const syncedSource = cur ? String(cur.x) : '';
+  const [draft, setDraft] = useDraft(syncedSource);
+  const [submittingValue, setSubmittingValue] = useState<number | null>(null);
+
   useEffect(() => {
-    if (!writer.pending) setPending(null);
+    if (!writer.pending) setSubmittingValue(null);
   }, [writer.pending]);
 
+  const parsed = parseInteger(draft);
+  const singleError = draft === '' ? null : validate(cap, { x: parsed, y: parsed });
+  const isEditing =
+    draft !== '' &&
+    !Number.isNaN(parsed) &&
+    (cur === null || cur.x !== parsed || cur.y !== parsed) &&
+    submittingValue === null;
+
   const off = disabled || writer.pending;
-  const send = (v: number) => {
+
+  const commitUniform = (v: number) => {
     if (cur && cur.x === v && cur.y === v) {
-      setPending(null);
+      setDraft(String(v));
       return;
     }
-    setPending(v);
+    setDraft(String(v));
+    setSubmittingValue(v);
     void writer.write({ x: v, y: v });
   };
 
   return (
     <div class="dpi-control">
-      {scale && (
-        <Fader
+      {scale ? (
+        <ContinuousDpiRow
           scale={scale}
-          current={cur}
-          pending={pending !== null && pending !== cur?.x ? pending : null}
-          writing={writer.pending}
+          cur={cur}
+          draft={draft}
+          parsed={parsed}
+          error={singleError}
+          isEditing={isEditing}
           disabled={off}
           labelId={labelId}
           feedbackId={feedbackId}
-          onPending={setPending}
-          onCommit={send}
+          onDraftChange={setDraft}
+          onCommit={commitUniform}
+          onCancelEdit={() => setDraft(cur ? String(cur.x) : '')}
         />
-      )}
-      {cur && cur.x !== cur.y && <p class="note">{t('dpi.xyDiffer', { x: cur.x, y: cur.y })}</p>}
-      <details class="advanced">
-        <summary>{independent ? t('dpi.advancedXY') : t('dpi.advancedValue')}</summary>
+      ) : (
         <DpiInputs {...props} cur={cur} independent={independent} />
-      </details>
+      )}
+
+      {scale && scale.presets.length > 0 && (
+        <div class="dpi-presets-row">
+          <span class="dpi-presets-label">{t('dpi.presets')}</span>
+          <div class="dpi-presets-list" role="group" aria-label={t('dpi.presets')}>
+            {scale.presets.map((p) => {
+              const pressed = cur !== null && cur.x === p && cur.y === p;
+              return (
+                <button
+                  type="button"
+                  key={p}
+                  class="preset-chip num"
+                  aria-pressed={pressed}
+                  aria-label={`${p} ${t('dpi.unit')}`}
+                  disabled={off}
+                  onClick={() => commitUniform(p)}
+                >
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {c && <p class="note dpi-range-note">{t('dpi.range', { min: c.min, max: c.max, step: c.step })}</p>}
+
+      {xyDiffer && <p class="note dpi-differ-note">{t('dpi.xyDiffer', { x: cur.x, y: cur.y })}</p>}
+
+      {scale && (independent || xyDiffer) && (
+        <details class="advanced" open={xyDiffer}>
+          <summary>{t('dpi.advancedXY')}</summary>
+          <DpiInputs {...props} cur={cur} independent={independent || xyDiffer} />
+        </details>
+      )}
     </div>
   );
 }
 
-interface FaderProps {
+interface ContinuousProps {
   scale: DpiScale;
-  current: DpiValue | null;
-  /** Value chosen but not yet confirmed by Bridge, or null. */
-  pending: number | null;
-  writing: boolean;
+  cur: DpiValue | null;
+  draft: string;
+  parsed: number;
+  error: string | null;
+  isEditing: boolean;
   disabled: boolean;
   labelId: string;
   feedbackId: string;
-  onPending: (v: number | null) => void;
+  onDraftChange: (text: string) => void;
   onCommit: (v: number) => void;
+  onCancelEdit: () => void;
 }
 
-function Fader({ scale, current, pending, writing, disabled, labelId, feedbackId, onPending, onCommit }: FaderProps) {
+function ContinuousDpiRow({
+  scale,
+  cur,
+  draft,
+  parsed,
+  error,
+  isEditing,
+  disabled,
+  labelId,
+  feedbackId,
+  onDraftChange,
+  onCommit,
+  onCancelEdit,
+}: ContinuousProps) {
   const hintId = `${labelId}-hint`;
-  // The thumb only exists when there is a value: a thumb at the minimum would read as one.
-  const value = pending ?? current?.x ?? null;
-  const crowded = useMemo(() => crowdedTicks(scale), [scale]);
+  const sliderVal = !Number.isNaN(parsed) ? parsed : cur?.x ?? null;
+  const canApply = !disabled && draft !== '' && error === null && (cur === null || cur.x !== parsed || cur.y !== parsed);
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (value === null) return;
+    const base = sliderVal ?? scale.min;
     let next: number;
     switch (e.key) {
       case 'ArrowRight':
       case 'ArrowUp':
-        next = scale.snap(value + scale.step);
+        next = scale.snap(base + scale.step);
         break;
       case 'ArrowLeft':
       case 'ArrowDown':
-        next = scale.snap(value - scale.step);
+        next = scale.snap(base - scale.step);
         break;
       case 'PageUp':
-        next = Math.max(scale.snap(value + scale.step), scale.toValue(scale.toPosition(value) + PAGE));
+        next = Math.max(scale.snap(base + scale.step), scale.toValue(scale.toPosition(base) + PAGE));
         break;
       case 'PageDown':
-        next = Math.min(scale.snap(value - scale.step), scale.toValue(scale.toPosition(value) - PAGE));
+        next = Math.min(scale.snap(base - scale.step), scale.toValue(scale.toPosition(base) - PAGE));
         break;
       case 'Home':
         next = scale.min;
@@ -106,107 +201,94 @@ function Fader({ scale, current, pending, writing, disabled, labelId, feedbackId
         break;
       case 'Enter':
         e.preventDefault();
-        if (pending !== null) onCommit(pending);
+        if (canApply) onCommit(parsed);
         return;
       case 'Escape':
-        if (pending !== null) {
+        if (isEditing) {
           e.preventDefault();
-          onPending(null);
+          onCancelEdit();
         }
         return;
       default:
         return;
     }
-    // Keys move by one step in DPI, not by one slider position.
     e.preventDefault();
-    onPending(next);
+    onDraftChange(String(next));
   };
 
   return (
-    <div class="fader">
-      <div class="fader-pending" aria-live="polite">
-        {pending !== null && (
-          <>
-            <span class="num fader-pending-value">{pending}</span>
-            {!writing && (
-              <>
-                <span class="note">{t('dpi.pending')}</span>
-                <button type="button" class="btn btn-primary" disabled={disabled} onClick={() => onCommit(pending)}>
-                  {t('dpi.apply')}
-                </button>
-              </>
-            )}
-          </>
-        )}
+    <form
+      class="dpi-main-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (canApply) onCommit(parsed);
+      }}
+    >
+      <div class="dpi-slider-combo">
+        <div class="dpi-track-wrap">
+          {sliderVal === null ? (
+            <div class="fader-rail" aria-hidden="true" />
+          ) : (
+            <input
+              type="range"
+              class="fader-input"
+              min={0}
+              max={RESOLUTION}
+              step={1}
+              value={scale.toPosition(sliderVal)}
+              disabled={disabled}
+              aria-labelledby={labelId}
+              aria-valuetext={`${sliderVal} ${t('dpi.unit')}`}
+              aria-describedby={`${hintId} ${feedbackId}`}
+              onInput={(e) => onDraftChange(String(scale.toValue(Number(e.currentTarget.value))))}
+              onChange={(e) => onCommit(scale.toValue(Number(e.currentTarget.value)))}
+              onKeyDown={onKeyDown}
+            />
+          )}
+          <span class="sr-only" id={hintId}>
+            {t('dpi.keyboardHint')}
+          </span>
+        </div>
+
+        <div class="dpi-input-group">
+          <label class="sr-only" for={`${labelId}-exact`}>
+            {t('dpi.inputLabel')}
+          </label>
+          <span class="input-with-unit">
+            <input
+              id={`${labelId}-exact`}
+              type="number"
+              class="input input-number num"
+              inputMode="numeric"
+              min={scale.min}
+              max={scale.max}
+              step={scale.step}
+              value={draft}
+              disabled={disabled}
+              aria-invalid={error !== null}
+              aria-describedby={feedbackId}
+              onInput={(e) => onDraftChange(e.currentTarget.value)}
+            />
+            <span class="unit">{t('dpi.unit')}</span>
+          </span>
+          <button type="submit" class="btn btn-primary" disabled={!canApply}>
+            {t('dpi.apply')}
+          </button>
+        </div>
       </div>
-      {value === null ? (
-        <div class="fader-rail" aria-hidden="true" />
-      ) : (
-        <input
-          type="range"
-          class="fader-input"
-          min={0}
-          max={RESOLUTION}
-          step={1}
-          value={scale.toPosition(value)}
-          disabled={disabled}
-          aria-labelledby={labelId}
-          aria-valuetext={`${value} DPI`}
-          aria-describedby={`${hintId} ${feedbackId}`}
-          onInput={(e) => onPending(scale.toValue(Number(e.currentTarget.value)))}
-          // `change` fires on pointer release; keyboard changes are committed with Enter.
-          onChange={(e) => onCommit(scale.toValue(Number(e.currentTarget.value)))}
-          onKeyDown={onKeyDown}
-        />
-      )}
-      <span class="sr-only" id={hintId}>
-        {t('dpi.keyboardHint')}
-      </span>
-      {scale.presets.length > 0 && (
-        <div class="ticks" role="group" aria-label={t('dpi.presets')}>
-          {scale.presets.map((p, i) => {
-            const pressed = current !== null && current.x === p && current.y === p;
-            const quiet = crowded[i] && !pressed;
-            return (
-              <button
-                type="button"
-                key={p}
-                class={`tick num${quiet ? ' is-crowded' : ''}`}
-                style={{ left: `${(scale.toPosition(p) / RESOLUTION) * 100}%` }}
-                aria-pressed={pressed}
-                aria-label={`${p} DPI`}
-                disabled={disabled}
-                onClick={() => onCommit(p)}
-              >
-                {p}
-              </button>
-            );
-          })}
+
+      {(isEditing || error) && (
+        <div class="dpi-edit-meta" aria-live="polite">
+          {isEditing && !error && (
+            <span class="badge badge-warn">
+              {t('dpi.editingLabel')}: <strong class="num">{parsed} {t('dpi.unit')}</strong>
+            </span>
+          )}
+          {error && <span class="field-error">{error}</span>}
         </div>
       )}
-    </div>
+    </form>
   );
-}
-
-/** Ticks closer than this share of the track may collide on a narrow fader. */
-const CROWDED = 0.09;
-
-/**
- * Of two ticks that sit too close, the one in the denser neighbourhood is
- * marked so a narrow fader can drop its label (the tick itself stays).
- */
-function crowdedTicks(scale: DpiScale): boolean[] {
-  const pos = scale.presets.map((p) => scale.toPosition(p) / RESOLUTION);
-  const flags = pos.map(() => false);
-  for (let i = 1; i < pos.length; i++) {
-    const a = pos[i - 1] as number;
-    const b = pos[i] as number;
-    if (b - a >= CROWDED || flags[i - 1]) continue;
-    const gapBeforeA = i >= 2 ? a - (pos[i - 2] as number) : Infinity;
-    const gapAfterB = i + 1 < pos.length ? (pos[i + 1] as number) - b : Infinity;
-    flags[gapBeforeA < gapAfterB ? i - 1 : i] = true;
-  }
-  return flags;
 }
 
 function DpiInputs({
@@ -226,24 +308,29 @@ function DpiInputs({
   const error = empty ? null : validate(cap, value);
   const unchanged = cur !== null && cur.x === value.x && cur.y === value.y;
   const off = disabled || writer.pending;
+
   const field = (label: string, v: string, set: (v: string) => void) => (
     <label class="field-stack">
       <span class="field-label">{label}</span>
-      <input
-        type="number"
-        class="input input-number num"
-        inputMode="numeric"
-        min={c?.min}
-        max={c?.max}
-        step={c?.step}
-        value={v}
-        disabled={off}
-        aria-invalid={error !== null}
-        aria-describedby={feedbackId}
-        onInput={(e) => set(e.currentTarget.value)}
-      />
+      <span class="input-with-unit">
+        <input
+          type="number"
+          class="input input-number num"
+          inputMode="numeric"
+          min={c?.min}
+          max={c?.max}
+          step={c?.step}
+          value={v}
+          disabled={off}
+          aria-invalid={error !== null}
+          aria-describedby={feedbackId}
+          onInput={(e) => set(e.currentTarget.value)}
+        />
+        <span class="unit">{t('dpi.unit')}</span>
+      </span>
     </label>
   );
+
   return (
     <form
       class="dpi-inputs"
@@ -265,7 +352,6 @@ function DpiInputs({
           {t('dpi.apply')}
         </button>
       </div>
-      {c && <p class="note num-inline">{t('dpi.range', { min: c.min, max: c.max, step: c.step })}</p>}
       {error && <p class="field-error">{error}</p>}
     </form>
   );
