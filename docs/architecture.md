@@ -26,7 +26,7 @@ flowchart LR
     ST["状态存储"]
     DH["驱动宿主（沙箱）"]
     HID["HID 后端与访问仲裁"]
-    TRAY["托盘与通知"]
+    TRAY["托盘、通知与设置面板"]
     RC["Registry 客户端"]
   end
   DRV["驱动包"]

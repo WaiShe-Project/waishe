@@ -65,7 +65,7 @@ OpenMouse、BatteryMonitor、HyperBatteryMonitor 等项目各自解决了其中�
 | 组成 | 仓库 | 职责 | 明确不负责 |
 | --- | --- | --- | --- |
 | Web Dashboard | `waishe` | 展示设备与状态、按能力渲染配置界面、驱动管理、偏好设置 | 硬件通信、协议知识 |
-| Bridge | `waishe-bridge` | 设备发现、驱动宿主、HID 访问仲裁、状态缓存、后台监控、托盘与通知、本地 API、提供 Dashboard 静态资源 | 品牌协议实现 |
+| Bridge | `waishe-bridge` | 设备发现、驱动宿主、HID 访问仲裁、状态缓存、后台监控、托盘与通知、原生设置面板、本地 API、提供 Dashboard 静态资源 | 品牌协议实现 |
 | Driver | `driver-*` | 用户态协议适配：探测设备、声明能力、读状态、执行配置 | 设备枚举、UI、联网、持久化。不是内核驱动 |
 | Driver SDK | `waishe-driver-sdk` | 驱动接口规范、能力模型、开发与测试工具 | — |
 | Driver Registry | `waishe-driver-registry` | 设备兼容表、驱动索引、版本与下载信息、验证记录 | 操作用户硬件、收集用户数据 |
@@ -256,6 +256,8 @@ HEAD-04 意味着驱动模型必须支持设备主动上报，不能只有“请
 | APP-05 | 卸载移除程序和自启项；用户数据可选保留 | P0 | M1 |
 | APP-06 | Bridge 更新检查，默认仅提示；下载的更新须校验签名 | P1 | M2 |
 | APP-07 | 导出脱敏诊断包 | P1 | M3 |
+| APP-08 | 原生设置面板：不打开浏览器即可查看各设备的电量与连接状态，并修改开机自启、低电量阈值与提醒间隔、托盘图标显示策略；与 Dashboard 共用同一份设置，任一处修改另一处立即生效。设备配置（DPI 等）仍只在 Dashboard 中进行 | P0 | M1 |
+| APP-09 | 首发平台为 Windows 11 x64。Windows 10 与 ARM64 不在首发支持范围内 | P0 | M1 |
 
 ## 6. 非功能需求
 
@@ -399,10 +401,11 @@ DPI 写入并回读在 S1 中实测 124–165 ms（PERF-05 要求 500 ms 以内�
 | Q4 | 默认端口 27463 在 M0 中可用；被占用时顺延的逻辑已在原型中实现。多用户会话下的端口策略仍待定 | M0 | M1 开始前 |
 | Q5 | 驱动包签名方案（minisign 密钥对 / Sigstore） | M2 设计 | M2 开始前 |
 | Q6 | 是否购买 Windows 代码签名证书 | 项目发起人 | 首个公开版本前 |
-| Q7 | Dashboard 前端技术栈 | M0 | M1 开始前 |
-| Q8 | Bridge 是否需要原生设置窗口，还是全部设置都放在 Dashboard | M0 | M1 开始前 |
-| Q9 | 最低支持的 Windows 版本与是否支持 ARM64 | 项目发起人 | M1 开始前 |
-| Q10 | Razer 驱动的实现路线：移植 OpenMouse（AGPL-3.0）或参照 openrazer（GPL-2.0-or-later）。两者都使 `driver-razer` 成为 copyleft | M0 | M1 开始前 |
+| Q7 | 已定：Preact + TypeScript + Vite | 项目发起人 | 2026-11-14 已定 |
+| Q8 | 已定：Bridge 提供原生设置面板（APP-08），设备配置仍在 Dashboard | 项目发起人 | 2026-11-14 已定 |
+| Q9 | 已定：仅 Windows 11 x64（APP-09） | 项目发起人 | 2026-11-14 已定 |
+| Q10 | 已定：逐段移植 OpenMouse 的 Razer 实现到 Rust，逐文件在 `driver-razer` 的 `PROVENANCE.md` 登记来源与提交哈希并保留版权声明；`driver-razer` 为 AGPL-3.0-or-later | 项目发起人 | 2026-11-14 已定 |
+| Q11 | 原生设置面板的界面技术：Win32 原生控件、egui、Slint 或其他。约束为体积（PERF-03）与私有内存（PERF-01） | M1 原型 | M1 开始后首项 |
 
 ## 11. 相对初稿的变更
 
