@@ -1,0 +1,22 @@
+{
+  "name": "waishe-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "description": "WaiShe Web Dashboard",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "mock": "node mock/server.mjs",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "preact": "^11.2.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}
