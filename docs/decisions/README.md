@@ -8,6 +8,7 @@
 | [0002](0002-licensing.md) | 分层许可证策略 | 已接受 | 2026-11-14 |
 | [0003](0003-driver-plugin-runtime.md) | 驱动插件运行时 | 已接受 | 2026-11-14 |
 | [0004](0004-dashboard-hosting-and-local-api-auth.md) | Dashboard 托管方式与本地 API 鉴权 | 已接受 | 2026-11-14 |
+| [0005](0005-settings-panel-webview2.md) | 原生设置面板用 WebView2 承载 Dashboard 的面板视图 | 已接受 | 2026-11-14 |
 
 ## 状态
 

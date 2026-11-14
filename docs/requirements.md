@@ -405,7 +405,7 @@ DPI 写入并回读在 S1 中实测 124–165 ms（PERF-05 要求 500 ms 以内�
 | Q8 | 已定：Bridge 提供原生设置面板（APP-08），设备配置仍在 Dashboard | 项目发起人 | 2026-11-14 已定 |
 | Q9 | 已定：仅 Windows 11 x64（APP-09） | 项目发起人 | 2026-11-14 已定 |
 | Q10 | 已定：逐段移植 OpenMouse 的 Razer 实现到 Rust，逐文件在 `driver-razer` 的 `PROVENANCE.md` 登记来源与提交哈希并保留版权声明；`driver-razer` 为 AGPL-3.0-or-later | 项目发起人 | 2026-11-14 已定 |
-| Q11 | 原生设置面板的界面技术：Win32 原生控件、egui、Slint 或其他。约束为体积（PERF-03）与私有内存（PERF-01） | M1 原型 | M1 开始后首项 |
+| Q11 | 已定：原生窗口内嵌 WebView2，显示 Dashboard 的面板视图，见 [ADR-0005](decisions/0005-settings-panel-webview2.md) | M1 原型 | 2026-11-14 已定 |
 
 ## 11. 相对初稿的变更
 
